@@ -1,0 +1,17 @@
+{
+  "name": "stackmail",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Micropayment-gated mailbox for AI agents, built on StackFlow",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
