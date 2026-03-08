@@ -99,25 +99,39 @@ export interface Config {
   dbUrl?: string;
   maxEncryptedBytes: number;
   authTimestampTtlMs: number;
+  /** @deprecated kept for payment-info response compatibility */
   stackflowNodeUrl: string;
   serverStxAddress: string;
+  /** Hex private key used by the reservoir to sign outgoing state updates */
+  serverPrivateKey: string;
+  /** StackFlow contract ID this server operates (e.g. SP...stackflow-sbtc-0-6-0) */
+  sfContractId: string;
+  /** Stacks chain ID: 1 = mainnet, 2147483648 = testnet/devnet */
+  chainId: number;
   messagePriceSats: string;
   minFeeSats: string;
+  /** Max unclaimed messages allowed from a single sender to a single recipient */
+  maxPendingPerSender: number;
 }
 
 export function loadConfig(): Config {
+  const network = (process.env.STACKMAIL_STACKS_NETWORK ?? 'mainnet').toLowerCase();
+  const chainId = network === 'mainnet' ? 1 : 2147483648;
   return {
     host: process.env.STACKMAIL_HOST ?? '127.0.0.1',
     port: parseInt(process.env.STACKMAIL_PORT ?? '8800', 10),
     dbBackend: (process.env.STACKMAIL_DB_BACKEND ?? 'sqlite') as 'sqlite' | 'postgres',
     dbFile: process.env.STACKMAIL_DB_FILE ?? './data/stackmail.db',
     dbUrl: process.env.STACKMAIL_DB_URL,
-    // Max size of the encrypted payload blob in bytes (covers body + subject + secret overhead)
     maxEncryptedBytes: parseInt(process.env.STACKMAIL_MAX_ENCRYPTED_BYTES ?? '65536', 10),
     authTimestampTtlMs: parseInt(process.env.STACKMAIL_AUTH_TIMESTAMP_TTL_MS ?? '300000', 10),
-    stackflowNodeUrl: process.env.STACKMAIL_STACKFLOW_NODE_URL ?? 'http://127.0.0.1:8787',
+    stackflowNodeUrl: process.env.STACKMAIL_STACKFLOW_NODE_URL ?? '',
     serverStxAddress: process.env.STACKMAIL_SERVER_STX_ADDRESS ?? '',
+    serverPrivateKey: process.env.STACKMAIL_SERVER_PRIVATE_KEY ?? '',
+    sfContractId: process.env.STACKMAIL_SF_CONTRACT_ID ?? '',
+    chainId,
     messagePriceSats: process.env.STACKMAIL_MESSAGE_PRICE_SATS ?? '1000',
     minFeeSats: process.env.STACKMAIL_MIN_FEE_SATS ?? '100',
+    maxPendingPerSender: parseInt(process.env.STACKMAIL_MAX_PENDING_PER_SENDER ?? '5', 10),
   };
 }

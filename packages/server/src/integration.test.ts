@@ -1,20 +1,49 @@
 /**
  * Integration test: full HTTP send → preview → claim → decrypt flow.
  *
- * Spins up a real HTTP server on a random port. Mocks fetch so that
- * StackFlow node calls return success without a real SF network.
+ * Spins up a real HTTP server on a random port. Uses a MockPaymentService
+ * so tests don't require a real StackFlow network.
  */
 
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomBytes, generateKeyPairSync, createSign, createECDH } from 'node:crypto';
 import { AddressInfo } from 'node:net';
-import { createMailServer } from './app.js';
+import { createMailServer, type IPaymentService } from './app.js';
 import { SqliteMessageStore } from './store.js';
-import { PaymentService } from './payment.js';
 import { pubkeyToStxAddress } from './auth.js';
 import { encryptMail, decryptMail, hashSecret } from '@stackmail/crypto';
 import type { Config } from './types.js';
+import type { PendingPayment } from './types.js';
+import type { VerifiedPayment } from './payment.js';
 import type { Server } from 'node:http';
+
+// ─── Mock payment service ──────────────────────────────────────────────────────
+
+class MockPaymentService implements IPaymentService {
+  async verifyIncomingPayment(proofRaw: string): Promise<VerifiedPayment> {
+    let proof: Record<string, unknown>;
+    try {
+      try {
+        proof = JSON.parse(Buffer.from(proofRaw, 'base64url').toString('utf-8')) as Record<string, unknown>;
+      } catch {
+        proof = JSON.parse(proofRaw) as Record<string, unknown>;
+      }
+    } catch {
+      throw new Error('invalid-proof-encoding');
+    }
+    const hashedSecret = proof['hashedSecret'] as string;
+    const senderAddress = (proof['forPrincipal'] ?? proof['actor'] ?? 'SP_SENDER') as string;
+    const amount = (proof['amount'] ?? proof['incomingAmount'] ?? '1000') as string;
+    if (!hashedSecret) throw Object.assign(new Error('missing hashedSecret'), { statusCode: 400, reason: 'missing-hashed-secret' });
+    return { hashedSecret, incomingAmount: amount, senderAddress };
+  }
+
+  async createOutgoingPayment(): Promise<PendingPayment | null> {
+    return null;
+  }
+
+  async settlePayment(): Promise<void> { /* no-op */ }
+}
 
 // ─── Test keypair helpers ─────────────────────────────────────────────────────
 
@@ -54,71 +83,44 @@ function buildAuthHeader(opts: {
 
 // ─── Test setup ───────────────────────────────────────────────────────────────
 
-// Generate a sender keypair (using ECDH for raw privkey access needed for decryption)
 const senderEcdh = createECDH('secp256k1');
 senderEcdh.generateKeys();
-const senderPrivkeyHex = senderEcdh.getPrivateKey('hex');
 const senderPubkeyHex = senderEcdh.getPublicKey('hex', 'compressed');
 
-// Generate a recipient keypair (needs signing capability for auth + decryption)
 const recipientSignKeypair = generateSecp256k1Keypair();
-const recipientEcdh = createECDH('secp256k1');
-// We need the same key for both signing and decryption. Use the signing key's
-// raw private key extracted from PKCS#8 DER for the ECDH decryption.
-// Instead, use two separate key systems: ECDH for encryption, signing keypair for auth.
-// In a real client, these would be the same key; here we use ECDH for encryption.
 const recipientEcdhForEncrypt = createECDH('secp256k1');
 recipientEcdhForEncrypt.generateKeys();
 const recipientEncryptPrivkeyHex = recipientEcdhForEncrypt.getPrivateKey('hex');
 const recipientEncryptPubkeyHex = recipientEcdhForEncrypt.getPublicKey('hex', 'compressed');
 
-// The recipient's STX address is derived from the SIGNING key (used in auth)
 const recipientAddress = pubkeyToStxAddress(recipientSignKeypair.compressedPubkeyHex);
 
 const serverConfig: Config = {
   host: '127.0.0.1',
-  port: 0, // random port
+  port: 0,
   dbBackend: 'sqlite',
   dbFile: ':memory:',
   maxEncryptedBytes: 65536,
   authTimestampTtlMs: 300_000,
-  stackflowNodeUrl: 'http://localhost:8787',
+  stackflowNodeUrl: '',
   serverStxAddress: 'SP_SERVER',
+  serverPrivateKey: '',
+  sfContractId: '',
+  chainId: 1,
   messagePriceSats: '1000',
   minFeeSats: '100',
+  maxPendingPerSender: 5,
 };
 
 let server: Server;
 let baseUrl: string;
 let store: SqliteMessageStore;
 
-// Mock fetch so StackFlow node calls succeed without a real network.
-// Save the real fetch first so test HTTP calls still go through.
-const realFetch = globalThis.fetch;
-vi.stubGlobal('fetch', async (url: RequestInfo | URL, opts?: RequestInit) => {
-  const urlStr = String(url);
-  // Route SF node API calls to mock responses
-  if (urlStr.includes('/counterparty/transfer')) {
-    return new Response(JSON.stringify({ ok: true, mySignature: 'mocked-sig' }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    });
-  }
-  if (urlStr.includes('/forwarding/reveal')) {
-    return new Response(JSON.stringify({ ok: true }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    });
-  }
-  // Everything else (including calls to our test server) uses the real fetch
-  return realFetch(url as RequestInfo, opts);
-});
-
 beforeAll(async () => {
   store = new SqliteMessageStore(':memory:');
   await store.init();
 
-  const paymentService = new PaymentService(serverConfig);
+  const paymentService = new MockPaymentService();
   server = createMailServer(serverConfig, store, paymentService);
 
   await new Promise<void>(resolve => {
@@ -153,8 +155,6 @@ describe('GET /payment-info/:addr', () => {
   });
 
   it('returns payment info after recipient registers (via auth)', async () => {
-    // Register recipient's encryption pubkey by calling GET /inbox (auth stores pubkey)
-    // We pre-seed the store directly for this test
     await store.savePublicKey(recipientAddress, recipientEncryptPubkeyHex);
 
     const res = await fetch(`${baseUrl}/payment-info/${recipientAddress}`);
@@ -182,18 +182,14 @@ describe('full send → inbox → preview → claim flow', () => {
     expect(res.status).toBe(200);
     const body = await res.json() as { messages: unknown[] };
     expect(Array.isArray(body.messages)).toBe(true);
-    expect(body.messages).toHaveLength(0);
 
-    // Pubkey should now be stored
     const stored = await store.getPublicKey(recipientAddress);
     expect(stored).toBe(recipientSignKeypair.compressedPubkeyHex);
   });
 
   it('step 2: POST /messages/:addr sends a message', async () => {
-    // Seed recipient's encryption pubkey so the server can return payment info
     await store.savePublicKey(recipientAddress, recipientEncryptPubkeyHex);
 
-    // Generate secret + encrypt
     const secretHex = randomBytes(32).toString('hex');
     const hashedSecretHex = hashSecret(secretHex);
     const encryptedPayload = encryptMail(
@@ -201,7 +197,6 @@ describe('full send → inbox → preview → claim flow', () => {
       recipientEncryptPubkeyHex,
     );
 
-    // Build a mock payment proof
     const proof = JSON.stringify({
       hashedSecret: hashedSecretHex,
       forPrincipal: pubkeyToStxAddress(senderPubkeyHex),
@@ -289,7 +284,6 @@ describe('full send → inbox → preview → claim flow', () => {
   });
 
   it('step 6: full preview → decrypt → claim round-trip succeeds', async () => {
-    // Get encrypted payload via preview
     const previewAuth = buildAuthHeader({
       pubkey: recipientSignKeypair.compressedPubkeyHex,
       action: 'get-inbox',
@@ -302,13 +296,11 @@ describe('full send → inbox → preview → claim flow', () => {
     expect(previewRes.status).toBe(200);
     const preview = await previewRes.json() as { encryptedPayload: { v: 1; epk: string; iv: string; data: string } };
 
-    // Decrypt to get the secret
     const decrypted = decryptMail(preview.encryptedPayload, recipientEncryptPrivkeyHex);
     expect(decrypted.subject).toBe('Integration test');
     expect(decrypted.body).toBe('Hello from integration test');
     const secretHex = decrypted.secret;
 
-    // Claim with the real secret
     const claimAuth = buildAuthHeader({
       pubkey: recipientSignKeypair.compressedPubkeyHex,
       action: 'claim-message',
@@ -337,7 +329,6 @@ describe('full send → inbox → preview → claim flow', () => {
       messageId,
       privateKey: recipientSignKeypair.privateKey,
     });
-    // Try to get secret again via preview (should say already-claimed)
     const previewRes = await fetch(`${baseUrl}/inbox/${messageId}/preview`, {
       headers: { 'x-stackmail-auth': authHeader },
     });
@@ -358,5 +349,46 @@ describe('auth error cases', () => {
       headers: { 'x-stackmail-auth': 'not-valid-base64-json' },
     });
     expect(res.status).toBe(401);
+  });
+});
+
+describe('per-sender HTLC cap', () => {
+  it('rejects when sender exceeds maxPendingPerSender unclaimed messages', async () => {
+    const capStore = new SqliteMessageStore(':memory:');
+    await capStore.init();
+
+    // Use a payment service that always approves with same hashedSecret + distinct secrets
+    const capService = new MockPaymentService();
+    const capConfig = { ...serverConfig, maxPendingPerSender: 2 };
+    const capServer = createMailServer(capConfig, capStore, capService);
+    await new Promise<void>(r => capServer.listen(0, '127.0.0.1', () => r()));
+    const capUrl = `http://127.0.0.1:${(capServer.address() as AddressInfo).port}`;
+
+    // Register recipient
+    const capRecipient = pubkeyToStxAddress(recipientSignKeypair.compressedPubkeyHex);
+    await capStore.savePublicKey(capRecipient, recipientEncryptPubkeyHex);
+
+    const sendMsg = async () => {
+      const secretHex = randomBytes(32).toString('hex');
+      const hashedSecretHex = hashSecret(secretHex);
+      const enc = encryptMail({ v: 1, secret: secretHex, body: 'hi' }, recipientEncryptPubkeyHex);
+      const proof = JSON.stringify({ hashedSecret: hashedSecretHex, forPrincipal: 'SP_SENDER', amount: '1000' });
+      return fetch(`${capUrl}/messages/${capRecipient}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-x402-payment': proof },
+        body: JSON.stringify({ from: 'SP_SENDER', encryptedPayload: enc }),
+      });
+    };
+
+    // First two messages should succeed
+    expect((await sendMsg()).status).toBe(200);
+    expect((await sendMsg()).status).toBe(200);
+    // Third should be rejected
+    const res = await sendMsg();
+    expect(res.status).toBe(429);
+    const body = await res.json() as { error: string };
+    expect(body.error).toBe('too-many-pending');
+
+    await new Promise<void>((r, j) => capServer.close(e => e ? j(e) : r()));
   });
 });

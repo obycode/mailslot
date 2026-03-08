@@ -10,16 +10,29 @@ import { randomUUID } from 'node:crypto';
 
 import type { Config } from './types.js';
 import type { MessageStore } from './store.js';
-import { PaymentService, PaymentError } from './payment.js';
+import { PaymentError } from './payment.js';
+import type { VerifiedPayment } from './payment.js';
+import type { PendingPayment } from './types.js';
+
+export interface IPaymentService {
+  verifyIncomingPayment(proofRaw: string): Promise<VerifiedPayment>;
+  createOutgoingPayment(args: {
+    hashedSecret: string;
+    incomingAmount: string;
+    recipientAddr: string;
+    contractId: string;
+  }): Promise<PendingPayment | null>;
+  settlePayment(args: { paymentId: string; secret: string; hashedSecret: string }): Promise<void>;
+}
 import { verifyInboxAuth, AuthError } from './auth.js';
 import { hashSecret, verifySecretHash } from '@stackmail/crypto';
 
 export function createMailServer(
   config: Config,
   store: MessageStore,
-  paymentService: PaymentService,
-  sfContractId = '',
+  paymentService: IPaymentService,
 ): ReturnType<typeof createServer> {
+  const sfContractId = config.sfContractId;
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
 
@@ -57,7 +70,7 @@ export function createMailServer(
 
     const proofRaw = Array.isArray(paymentHeader) ? paymentHeader[0] : paymentHeader;
 
-    let verified: Awaited<ReturnType<PaymentService['verifyIncomingPayment']>>;
+    let verified: VerifiedPayment;
     try {
       verified = await paymentService.verifyIncomingPayment(proofRaw);
     } catch (err) {
@@ -99,6 +112,15 @@ export function createMailServer(
     const encSize = Buffer.byteLength(enc.data as string, 'hex') / 2;
     if (encSize > config.maxEncryptedBytes) {
       return json(res, 413, { error: 'payload-too-large' });
+    }
+
+    // Per-sender HTLC cap: prevent spam by limiting unclaimed messages
+    const pendingCount = await store.countPendingFromSender(verified.senderAddress, to);
+    if (pendingCount >= config.maxPendingPerSender) {
+      return json(res, 429, {
+        error: 'too-many-pending',
+        message: `Too many unclaimed messages from this sender (limit: ${config.maxPendingPerSender})`,
+      });
     }
 
     const pendingPayment = sfContractId

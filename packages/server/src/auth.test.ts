@@ -54,10 +54,14 @@ const testConfig: Config = {
   dbFile: ':memory:',
   maxEncryptedBytes: 65536,
   authTimestampTtlMs: 300_000,
-  stackflowNodeUrl: 'http://localhost:8787',
+  stackflowNodeUrl: '',
   serverStxAddress: 'SP123',
+  serverPrivateKey: '',
+  sfContractId: '',
+  chainId: 1,
   messagePriceSats: '1000',
   minFeeSats: '100',
+  maxPendingPerSender: 5,
 };
 
 /** Minimal in-memory MessageStore stub. */
@@ -75,6 +79,7 @@ function makeMockStore(): MessageStore {
     claimMessage: async () => { throw new Error('not implemented'); },
     getClaimedMessage: async () => null,
     markPaymentSettled: async () => {},
+    countPendingFromSender: async () => 0,
   };
 }
 

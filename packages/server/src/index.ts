@@ -7,7 +7,7 @@ import { dirname } from 'node:path';
 
 import { loadConfig } from './types.js';
 import { SqliteMessageStore } from './store.js';
-import { PaymentService } from './payment.js';
+import { ReservoirService } from './reservoir.js';
 import { createMailServer } from './app.js';
 
 async function main(): Promise<void> {
@@ -18,13 +18,34 @@ async function main(): Promise<void> {
   await store.init();
   console.log('stackmail: database ready');
 
-  const paymentService = new PaymentService(config);
-  const sfContractId = process.env.STACKMAIL_SF_CONTRACT_ID ?? '';
+  if (!config.serverPrivateKey) {
+    console.warn('stackmail: STACKMAIL_SERVER_PRIVATE_KEY not set — payment verification disabled');
+  }
+  if (!config.sfContractId) {
+    console.warn('stackmail: STACKMAIL_SF_CONTRACT_ID not set — outgoing payments disabled');
+  }
 
-  const server = createMailServer(config, store, paymentService, sfContractId);
+  // Inline reservoir shares the same SQLite DB as the message store
+  const { default: Database } = await import('better-sqlite3');
+  const reservoirDb = new Database(config.dbFile);
+  reservoirDb.pragma('journal_mode = WAL');
+  reservoirDb.pragma('synchronous = NORMAL');
+
+  const reservoir = new ReservoirService({
+    db: reservoirDb,
+    serverAddress: config.serverStxAddress,
+    serverPrivateKey: config.serverPrivateKey,
+    contractId: config.sfContractId,
+    chainId: config.chainId,
+    minFeeSats: config.minFeeSats,
+    messagePriceSats: config.messagePriceSats,
+  });
+
+  const server = createMailServer(config, store, reservoir);
 
   server.listen(config.port, config.host, () => {
     console.log(`stackmail: listening on ${config.host}:${config.port}`);
+    console.log(`stackmail: network=${config.chainId === 1 ? 'mainnet' : 'testnet'}, contract=${config.sfContractId || '(none)'}`);
   });
 }
 

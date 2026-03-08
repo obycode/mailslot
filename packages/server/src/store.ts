@@ -41,6 +41,9 @@ export interface MessageStore {
   claimMessage(id: string, recipientAddr: string): Promise<MailMessage>;
   getClaimedMessage(id: string, recipientAddr: string): Promise<MailMessage | null>;
   markPaymentSettled(paymentId: string): Promise<void>;
+
+  /** Count unclaimed messages from a given sender to a given recipient */
+  countPendingFromSender(fromAddr: string, toAddr: string): Promise<number>;
 }
 
 // ─── SQLite implementation ────────────────────────────────────────────────────
@@ -257,6 +260,13 @@ export class SqliteMessageStore implements MessageStore {
     this.assertDb()
       .prepare('UPDATE messages SET payment_settled = 1 WHERE payment_id = ?')
       .run(paymentId);
+  }
+
+  async countPendingFromSender(fromAddr: string, toAddr: string): Promise<number> {
+    const row = this.assertDb()
+      .prepare('SELECT COUNT(*) as cnt FROM messages WHERE from_addr = ? AND to_addr = ? AND claimed = 0')
+      .get(fromAddr, toAddr) as { cnt: number };
+    return row?.cnt ?? 0;
   }
 
   private rowToStored(row: Record<string, unknown>): StoredMessage {
