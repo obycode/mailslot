@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stackmail</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --surface2:  #1c2128;
+      --border:    #30363d;
+      --border2:   #21262d;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --accent:    #5546FF;
+      --accent-dim:#3b30cc;
+      --green:     #3fb950;
+      --red:       #f85149;
+      --yellow:    #d29922;
+      --radius:    8px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* ── Layout ─────────────────────────────────────────────────────── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      height: 56px;
+    }
+
+    .logo {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logo-icon {
+      width: 28px;
+      height: 28px;
+      background: var(--accent);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    nav { display: flex; gap: 4px; margin-left: auto; }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 6px 14px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-family: inherit;
+      transition: color 0.15s, background 0.15s;
+    }
+    .tab-btn:hover { color: var(--text); background: var(--surface2); }
+    .tab-btn.active { color: var(--text); background: var(--surface2); font-weight: 600; }
+
+    main { max-width: 900px; margin: 0 auto; padding: 24px; }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Cards ──────────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+
+    .card-value {
+      font-size: 15px;
+      color: var(--text);
+      word-break: break-all;
+    }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
+
+    /* ── Status dot ─────────────────────────────────────────────────── */
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+    .dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .dot.red   { background: var(--red);   box-shadow: 0 0 6px var(--red); }
+
+    .status-label { font-size: 18px; font-weight: 600; }
+
+    /* ── Buttons ─────────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: var(--radius);
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+      font-weight: 500;
+      transition: opacity 0.15s, background 0.15s;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-dim); }
+    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover:not(:disabled) { background: var(--border2); }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+    .btn-danger { background: #3d1a1a; color: var(--red); border: 1px solid #5c2222; }
+    .btn-danger:hover:not(:disabled) { background: #4d2020; }
+
+    /* ── Forms ──────────────────────────────────────────────────────── */
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+
+    input[type=text], textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 14px;
+      padding: 8px 12px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input[type=text]:focus, textarea:focus { border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 100px; }
+
+    /* ── Address + copy ─────────────────────────────────────────────── */
+    .addr-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      color: var(--muted);
+      word-break: break-all;
+    }
+
+    /* ── Message items ──────────────────────────────────────────────── */
+    .msg-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .msg-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .msg-from {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .msg-meta {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .badge {
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-green { background: #1a3d2b; color: var(--green); }
+    .badge-purple { background: #1d1847; color: #a08cff; }
+    .badge-yellow { background: #332900; color: var(--yellow); }
+
+    .msg-subject { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+    .msg-body { color: var(--muted); font-size: 13px; white-space: pre-wrap; }
+    .msg-amount { font-size: 12px; color: var(--muted); }
+
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Alert / notice ─────────────────────────────────────────────── */
+    .alert {
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+    .alert-info    { background: #0d1f3c; border: 1px solid #1a3a6e; color: #58a6ff; }
+    .alert-success { background: #0d2b1d; border: 1px solid #1a4a33; color: var(--green); }
+    .alert-error   { background: #2d0f0f; border: 1px solid #5c2222; color: var(--red); }
+    .alert-warning { background: #2b2000; border: 1px solid #4a3800; color: var(--yellow); }
+
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: var(--muted);
+    }
+    .empty-state-icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-state h3 { font-size: 16px; color: var(--text); margin-bottom: 8px; }
+
+    /* ── Monospace display ──────────────────────────────────────────── */
+    .mono {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      word-break: break-all;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 20px 0;
+    }
+
+    .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .spacer { flex: 1; }
+
+    /* ── Info panel (compose) ───────────────────────────────────────── */
+    .info-panel {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-top: 12px;
+    }
+    .info-panel-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      padding: 3px 0;
+    }
+    .info-panel-label { color: var(--muted); }
+    .info-panel-value { color: var(--text); font-family: 'SF Mono', 'Fira Code', monospace; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">✉</div>
+    Stackmail
+  </div>
+  <nav>
+    <button class="tab-btn active" data-tab="status">Status</button>
+    <button class="tab-btn" data-tab="inbox">Inbox</button>
+    <button class="tab-btn" data-tab="compose">Compose</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ───────────────────────── STATUS TAB ───────────────────────────── -->
+  <div class="tab-panel active" id="tab-status">
+    <div class="status-row">
+      <div class="dot" id="health-dot"></div>
+      <span class="status-label" id="health-label">Checking server…</span>
+    </div>
+
+    <div class="grid-2" id="status-cards">
+      <div class="card">
+        <div class="card-title">Server Address</div>
+        <div class="card-value mono" id="s-addr">—</div>
+      </div>
+      <div class="card">
+        <div class="card-title">SF Contract</div>
+        <div class="card-value mono" id="s-contract">—</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Message Price</div>
+        <div class="card-value" id="s-price">—</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Network</div>
+        <div class="card-value" id="s-network">—</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Session Key</div>
+      <div class="addr-row" style="margin-bottom:12px">
+        <span id="session-addr">Generating…</span>
+        <button class="btn btn-secondary btn-sm" id="copy-session-addr-btn">Copy</button>
+      </div>
+      <div class="addr-row" style="margin-bottom:16px;color:var(--muted)">
+        <span style="font-size:11px">Pubkey: </span>
+        <span class="mono" id="session-pubkey" style="font-size:11px">—</span>
+      </div>
+      <div class="row" style="gap:8px">
+        <button class="btn btn-secondary btn-sm" id="regen-key-btn">Regenerate Key</button>
+      </div>
+      <div class="alert alert-info" style="margin-top:12px;margin-bottom:0">
+        This is an ephemeral secp256k1 keypair stored only in your browser (localStorage).
+        Your STX address is derived from it — share it so others can send you messages.
+        The key never leaves your browser.
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────────────────── INBOX TAB ────────────────────────────── -->
+  <div class="tab-panel" id="tab-inbox">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">Your Inbox Address</div>
+      <div class="addr-row">
+        <span class="mono" id="inbox-addr">—</span>
+        <button class="btn btn-secondary btn-sm" id="copy-inbox-addr-btn">Copy</button>
+      </div>
+      <div style="margin-top:8px;font-size:12px;color:var(--muted)">
+        Share this address so people can send you messages.
+      </div>
+    </div>
+
+    <div class="row" style="margin-bottom:16px">
+      <button class="btn btn-secondary" id="refresh-inbox-btn">⟳ Refresh</button>
+      <label style="margin:0;display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+        <input type="checkbox" id="show-claimed-cb" /> Show claimed
+      </label>
+    </div>
+
+    <div id="inbox-status"></div>
+    <div id="inbox-list"></div>
+  </div>
+
+  <!-- ───────────────────────── COMPOSE TAB ──────────────────────────── -->
+  <div class="tab-panel" id="tab-compose">
+    <div class="card">
+      <div class="form-group">
+        <label for="to-input">To (STX address)</label>
+        <input type="text" id="to-input" placeholder="SP…" spellcheck="false" autocomplete="off" />
+        <div id="recipient-status" style="margin-top:8px;font-size:13px;color:var(--muted)"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="subject-input">Subject <span style="color:var(--muted)">(optional)</span></label>
+        <input type="text" id="subject-input" placeholder="Hello from Stackmail" />
+      </div>
+
+      <div class="form-group">
+        <label for="body-input">Message</label>
+        <textarea id="body-input" placeholder="Write your message here…"></textarea>
+      </div>
+
+      <div id="payment-panel" style="display:none">
+        <div class="info-panel">
+          <div class="info-panel-row">
+            <span class="info-panel-label">Message price</span>
+            <span class="info-panel-value" id="pay-price">—</span>
+          </div>
+          <div class="info-panel-row">
+            <span class="info-panel-label">Your channel balance</span>
+            <span class="info-panel-value" id="pay-balance">—</span>
+          </div>
+          <div class="info-panel-row">
+            <span class="info-panel-label">Nonce</span>
+            <span class="info-panel-value" id="pay-nonce">—</span>
+          </div>
+        </div>
+        <div class="alert alert-info" style="margin-top:10px;margin-bottom:0;font-size:12px">
+          Using an ephemeral StackFlow channel — no on-chain transaction required for testing.
+        </div>
+      </div>
+
+      <div id="send-status" style="margin-top:12px"></div>
+
+      <div style="margin-top:16px">
+        <button class="btn btn-primary" id="send-btn" disabled>Send Message</button>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script type="module">
+// ─────────────────────────────────────────────────────────────────────────────
+// External crypto libraries (pinned versions)
+// ─────────────────────────────────────────────────────────────────────────────
+import { secp256k1 } from 'https://esm.sh/@noble/curves@1.7.1/secp256k1';
+import { sha256 } from 'https://esm.sh/@noble/hashes@1.7.1/sha256';
+import { ripemd160 } from 'https://esm.sh/@noble/hashes@1.7.1/ripemd160';
+import { hkdf } from 'https://esm.sh/@noble/hashes@1.7.1/hkdf';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────────────────────────
+// These match the deployed contracts referenced by the server.
+const SF_CONTRACT = 'SP3QFYVTMS0PRJT3K3GMDW9DGR33TDHENSDWVNQMR.sm-stackflow';
+const TOKEN       = 'SP3QFYVTMS0PRJT3K3GMDW9DGR33TDHENSDWVNQMR.sm-test-token';
+const CHAIN_ID    = 1;   // mainnet
+const MSG_PRICE   = 1000n;
+
+// c32 character set (Stacks' base-32 alphabet)
+const C32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Utility helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Concatenate multiple Uint8Arrays into one */
+function concat(arrs) {
+  const total = arrs.reduce((s, a) => s + a.length, 0);
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const a of arrs) { out.set(a, off); off += a.length; }
+  return out;
+}
+
+/** Bytes → lowercase hex string */
+function bytesToHex(b) {
+  return Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('');
+}
+
+/** Hex string → Uint8Array */
+function hexToBytes(h) {
+  h = h.replace(/^0x/, '');
+  const out = new Uint8Array(h.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(h.slice(i*2, i*2+2), 16);
+  return out;
+}
+
+/** Write a big-endian 32-bit unsigned int into a new 4-byte array */
+function u32be(n) {
+  const b = new Uint8Array(4);
+  b[0] = (n >>> 24) & 0xff;
+  b[1] = (n >>> 16) & 0xff;
+  b[2] = (n >>>  8) & 0xff;
+  b[3] =  n         & 0xff;
+  return b;
+}
+
+/** Write a big-endian 128-bit unsigned int (BigInt) into a new 16-byte array */
+function u128be(n) {
+  const b = new Uint8Array(16);
+  let v = BigInt.asUintN(128, n);
+  for (let i = 15; i >= 0; i--) { b[i] = Number(v & 0xffn); v >>= 8n; }
+  return b;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// c32check — Stacks address encoding
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Encode raw bytes as a c32 string (Stacks' base-32 variant).
+ * Treats input as a big-endian big integer and extracts 5-bit groups.
+ */
+function c32encode(data) {
+  // Compute BigInt from bytes
+  let n = 0n;
+  for (const b of data) { n = (n << 8n) | BigInt(b); }
+  if (n === 0n) return '';
+  const chars = [];
+  while (n > 0n) { chars.push(C32[Number(n % 32n)]); n /= 32n; }
+  for (let i = 0; i < data.length && data[i] === 0; i++) chars.push('0');
+  return chars.reverse().join('');
+}
+
+/**
+ * Derive the Stacks (c32check) address from a 33-byte compressed secp256k1 pubkey.
+ * Steps:
+ *   1. hash160 = RIPEMD160(SHA256(pubkey))   — standard Bitcoin/Stacks key hash
+ *   2. checksum = SHA256(SHA256([version, ...hash160])).slice(0,4)
+ *   3. address  = 'S' + C32[version] + c32encode([...hash160, ...checksum])
+ *
+ * Version 22 = mainnet P2PKH.
+ */
+function pubkeyToStxAddress(pubkeyBytes) {
+  const sha   = sha256(pubkeyBytes);          // SHA256 of compressed pubkey
+  const h160  = ripemd160(sha);               // then RIPEMD160
+  const version = 22;                         // Stacks mainnet P2PKH
+  const payload = concat([new Uint8Array([version]), h160]);
+  const h1      = sha256(payload);
+  const checksum = sha256(h1).slice(0, 4);    // double-SHA256 checksum
+  const full     = concat([h160, checksum]);
+  return 'S' + C32[version & 0x1f] + c32encode(full);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// c32 decoding — needed to serialize principals for SIP-018
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Decode a c32-encoded string into exactly `expectedBytes` bytes.
+ * Processes characters right-to-left, accumulating 5-bit chunks into bytes.
+ */
+function c32DecodeFixed(encoded, expectedBytes) {
+  const result = new Uint8Array(expectedBytes);
+  let carry = 0, carryBits = 0, byteIdx = expectedBytes - 1;
+  for (let i = encoded.length - 1; i >= 0 && byteIdx >= 0; i--) {
+    const val = C32.indexOf(encoded[i].toUpperCase());
+    if (val < 0) throw new Error(`Invalid c32 char: ${encoded[i]}`);
+    carry |= (val << carryBits);
+    carryBits += 5;
+    if (carryBits >= 8) {
+      result[byteIdx--] = carry & 0xff;
+      carry >>= 8;
+      carryBits -= 8;
+    }
+  }
+  return result;
+}
+
+/**
+ * Parse an SP.../ST... address into { version, hash160 }.
+ * Also handles contract principals (addr.contract-name) by stripping the suffix.
+ */
+function parseStxAddress(address) {
+  const dotIdx = address.indexOf('.');
+  const addr   = dotIdx >= 0 ? address.slice(0, dotIdx) : address;
+  if (!addr.startsWith('S')) throw new Error(`Invalid STX address: ${addr}`);
+  const version = C32.indexOf(addr[1].toUpperCase());
+  if (version < 0) throw new Error(`Invalid version char: ${addr[1]}`);
+  // 24 bytes = 20-byte hash160 + 4-byte checksum
+  const decoded = c32DecodeFixed(addr.slice(2), 24);
+  return { version, hash160: decoded.slice(0, 20) };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Clarity value serialization
+// Matches the server's packages/server/src/sip018.ts
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Serialize a Clarity value to its consensus-encoding.
+ * Type tags:
+ *   0x01 = uint (16 bytes BE)
+ *   0x02 = buff
+ *   0x05 = standard principal
+ *   0x06 = contract principal
+ *   0x09 = none
+ *   0x0a = some(v)
+ *   0x0c = tuple (field-sorted by name)
+ *   0x0d = string-ascii
+ */
+function serializeClarityValue(cv) {
+  switch (cv.type) {
+    case 'uint':
+      return concat([new Uint8Array([0x01]), u128be(BigInt(cv.value))]);
+
+    case 'principal': {
+      const dotIdx = cv.value.indexOf('.');
+      if (dotIdx < 0) {
+        // Standard principal: [0x05, version, hash160(20)]
+        const { version, hash160 } = parseStxAddress(cv.value);
+        return concat([new Uint8Array([0x05, version]), hash160]);
+      } else {
+        // Contract principal: [0x06, version, hash160, nameLen, name]
+        const base = cv.value.slice(0, dotIdx);
+        const name = new TextEncoder().encode(cv.value.slice(dotIdx + 1));
+        const { version, hash160 } = parseStxAddress(base);
+        return concat([new Uint8Array([0x06, version]), hash160, new Uint8Array([name.length]), name]);
+      }
+    }
+
+    case 'buff': {
+      const bytes = hexToBytes(cv.value);
+      return concat([new Uint8Array([0x02]), u32be(bytes.length), bytes]);
+    }
+
+    case 'none':
+      return new Uint8Array([0x09]);
+
+    case 'some':
+      return concat([new Uint8Array([0x0a]), serializeClarityValue(cv.value)]);
+
+    case 'string-ascii': {
+      const bytes = new TextEncoder().encode(cv.value);
+      return concat([new Uint8Array([0x0d]), u32be(bytes.length), bytes]);
+    }
+
+    case 'tuple': {
+      // Tuple fields MUST be sorted lexicographically by name
+      const names = Object.keys(cv.fields).sort();
+      const parts = [new Uint8Array([0x0c]), u32be(names.length)];
+      for (const name of names) {
+        const nb = new TextEncoder().encode(name);
+        parts.push(new Uint8Array([nb.length]), nb, serializeClarityValue(cv.fields[name]));
+      }
+      return concat(parts);
+    }
+
+    default:
+      throw new Error(`Unknown Clarity type: ${cv.type}`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SIP-018 hashing and signing
+// Matches packages/server/src/sip018.ts
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SIP018_PREFIX = new TextEncoder().encode('SIP018');
+const SF_VERSION    = '0.6.0';
+
+/**
+ * Build the domain tuple for SIP-018 structured data.
+ * Domain distinguishes signed messages from different contracts and versions.
+ */
+function buildDomain(contractId, chainId) {
+  return {
+    type: 'tuple',
+    fields: {
+      'chain-id': { type: 'uint', value: BigInt(chainId) },
+      name:       { type: 'string-ascii', value: contractId },
+      version:    { type: 'string-ascii', value: SF_VERSION },
+    },
+  };
+}
+
+/**
+ * Compute the SIP-018 hash:
+ *   sha256("SIP018" || sha256(serialize(domain)) || sha256(serialize(message)))
+ *
+ * This is what the signer commits to; recovery of the pubkey from the signature
+ * allows the server to verify without a public-key lookup.
+ */
+function computeSip018Hash(contractId, message, chainId) {
+  const domainHash  = sha256(serializeClarityValue(buildDomain(contractId, chainId)));
+  const messageHash = sha256(serializeClarityValue(message));
+  return sha256(concat([SIP018_PREFIX, domainHash, messageHash]));
+}
+
+/**
+ * Sign a SIP-018 message tuple.
+ * Returns a 65-byte hex string: [recovery_id (0|1), r (32), s (32)].
+ * The recovery_id lets the verifier reconstruct the pubkey without storing it.
+ */
+function sip018Sign(contractId, message, privKeyBytes, chainId) {
+  const hash = computeSip018Hash(contractId, message, chainId);
+  // lowS = true produces canonical signatures (matches server expectation)
+  const sig  = secp256k1.sign(hash, privKeyBytes, { lowS: true });
+  const compact = sig.toCompactRawBytes(); // 64 bytes: r || s
+  const full = new Uint8Array(65);
+  full[0] = sig.recovery ?? 0;
+  full.set(compact, 1);
+  return '0x' + bytesToHex(full);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Canonical pipe key ordering
+// Two principals forming a StackFlow channel are always stored in a canonical
+// order (lexicographic on their consensus-buff encoding), so both sides agree.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Convert an STX address (or contract principal) to its consensus encoding bytes */
+function toConsensusBuff(addr) {
+  if (!addr.includes('.')) {
+    const { version, hash160 } = parseStxAddress(addr);
+    return concat([new Uint8Array([0x05, version]), hash160]);
+  } else {
+    const base = addr.slice(0, addr.indexOf('.'));
+    const name = new TextEncoder().encode(addr.slice(addr.indexOf('.') + 1));
+    const { version, hash160 } = parseStxAddress(base);
+    return concat([new Uint8Array([0x06, version]), hash160, new Uint8Array([name.length]), name]);
+  }
+}
+
+/**
+ * Return the canonical pipeKey — principal-1 is whichever sorts first
+ * by their consensus-buff encoding. This matches how the server orders them.
+ */
+function canonicalPipeKey(token, a, b) {
+  const pa = toConsensusBuff(a), pb = toConsensusBuff(b);
+  for (let i = 0; i < Math.min(pa.length, pb.length); i++) {
+    if (pa[i] < pb[i]) return { token, 'principal-1': a, 'principal-2': b };
+    if (pa[i] > pb[i]) return { token, 'principal-1': b, 'principal-2': a };
+  }
+  return { token, 'principal-1': a, 'principal-2': b };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Build the StackFlow transfer message tuple
+// The message encodes the new channel state after the payment.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Build the Clarity tuple for a StackFlow HTLC transfer.
+ * - forPrincipal: who this state update is FROM (the actor's counterpart)
+ * - balance-1/balance-2: ordered per canonical pipeKey
+ */
+function buildTransferMessage({ pipeKey, forPrincipal, myBalance, theirBalance, nonce, action, actor, hashedSecret, validAfter }) {
+  // Determine which balance slot belongs to which principal
+  const localIsPrincipal1 = pipeKey['principal-1'] === forPrincipal;
+  const balance1 = localIsPrincipal1 ? myBalance : theirBalance;
+  const balance2 = localIsPrincipal1 ? theirBalance : myBalance;
+
+  return {
+    type: 'tuple',
+    fields: {
+      'principal-1': { type: 'principal', value: pipeKey['principal-1'] },
+      'principal-2': { type: 'principal', value: pipeKey['principal-2'] },
+      token: pipeKey.token == null
+        ? { type: 'none' }
+        : { type: 'some', value: { type: 'principal', value: pipeKey.token } },
+      'balance-1': { type: 'uint', value: balance1 },
+      'balance-2': { type: 'uint', value: balance2 },
+      nonce:       { type: 'uint', value: nonce },
+      action:      { type: 'uint', value: action },
+      actor:       { type: 'principal', value: actor },
+      'hashed-secret': hashedSecret == null
+        ? { type: 'none' }
+        : { type: 'some', value: { type: 'buff', value: hashedSecret } },
+      'valid-after': validAfter == null
+        ? { type: 'none' }
+        : { type: 'some', value: { type: 'uint', value: validAfter } },
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Auth header builder
+// Matches the server's verifyInboxAuth() in auth.ts:
+//   header = base64(JSON({ pubkey, payload, signature }))
+//   signature = compact ECDSA (64-byte r||s hex) over sha256(JSON(payload))
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildAuthHeader(privKeyBytes, pubKeyHex, address, action, messageId) {
+  const payload = { action, address, timestamp: Date.now() };
+  if (messageId) payload.messageId = messageId;
+
+  const msgJson = JSON.stringify(payload);
+  // Server verifies: verifySecp256k1Signature(JSON.stringify(payload), sig, pubkey)
+  const msgHash = sha256(new TextEncoder().encode(msgJson));
+  const sig     = secp256k1.sign(msgHash, privKeyBytes, { lowS: true });
+  const sigHex  = bytesToHex(sig.toCompactRawBytes()); // 64-byte compact r||s
+
+  return btoa(JSON.stringify({ pubkey: pubKeyHex, payload, signature: sigHex }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ECIES encryption — matches packages/crypto/src/index.ts
+//
+// Scheme:
+//   1. Ephemeral secp256k1 keypair (esk, epk)
+//   2. shared = ECDH(esk, recipientPubkey)  — x-coordinate only (32 bytes)
+//   3. key    = HKDF-SHA256(shared, salt="stackmail-v1", info="encrypt", len=32)
+//   4. iv     = random 12 bytes
+//   5. ciphertext || authTag = AES-256-GCM(key, iv, JSON(payload))
+//   6. output = { v:1, epk (hex), iv (hex), data: ciphertext||authTag (hex) }
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function encryptMail(payload, recipientPubkeyHex) {
+  // Ephemeral sender keypair
+  const eskBytes = secp256k1.utils.randomPrivateKey();  // 32 random bytes
+  const epkBytes = secp256k1.getPublicKey(eskBytes, true); // 33-byte compressed
+
+  // ECDH shared secret — noble returns 33-byte compressed point;
+  // Node's ECDH (used on server) returns x-coordinate only (32 bytes).
+  // So we slice off the prefix byte to match the server's derive key.
+  const recipientPub = hexToBytes(recipientPubkeyHex.replace(/^0x/,''));
+  const sharedFull = secp256k1.getSharedSecret(eskBytes, recipientPub, true); // 33 bytes: [02/03, x...]
+  const sharedX    = sharedFull.slice(1); // 32-byte x-coordinate
+
+  // HKDF-SHA256 key derivation (same parameters as server)
+  const salt = new TextEncoder().encode('stackmail-v1');
+  const info = new TextEncoder().encode('encrypt');
+  const key  = hkdf(sha256, sharedX, salt, info, 32); // 32-byte AES key
+
+  // AES-256-GCM encryption via WebCrypto
+  const iv         = crypto.getRandomValues(new Uint8Array(12));
+  const plaintext  = new TextEncoder().encode(JSON.stringify(payload));
+  const cryptoKey  = await crypto.subtle.importKey('raw', key, 'AES-GCM', false, ['encrypt']);
+  // WebCrypto returns ciphertext + 16-byte auth tag concatenated
+  const encrypted  = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, cryptoKey, plaintext));
+
+  return {
+    v: 1,
+    epk:  bytesToHex(epkBytes),
+    iv:   bytesToHex(iv),
+    data: bytesToHex(encrypted), // ciphertext || authTag
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ECIES decryption — reverse of encryptMail
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function decryptMail(encrypted, privKeyBytes) {
+  const epkBytes  = hexToBytes(encrypted.epk);
+  const iv        = hexToBytes(encrypted.iv);
+  const combined  = hexToBytes(encrypted.data);  // ciphertext || authTag (16 bytes at end)
+
+  // Recover x-coordinate of shared secret (matches Node ECDH output)
+  const sharedFull = secp256k1.getSharedSecret(privKeyBytes, epkBytes, true);
+  const sharedX    = sharedFull.slice(1);
+
+  const salt = new TextEncoder().encode('stackmail-v1');
+  const info = new TextEncoder().encode('encrypt');
+  const key  = hkdf(sha256, sharedX, salt, info, 32);
+
+  const cryptoKey = await crypto.subtle.importKey('raw', key, 'AES-GCM', false, ['decrypt']);
+  // WebCrypto expects ciphertext+authTag in one buffer
+  const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, cryptoKey, combined);
+  return JSON.parse(new TextDecoder().decode(plaintext));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Session key management
+// One ephemeral secp256k1 keypair per browser session (localStorage).
+// ─────────────────────────────────────────────────────────────────────────────
+
+function loadOrCreateKey() {
+  let hex = localStorage.getItem('stackmail_privkey');
+  if (!hex) {
+    const bytes = secp256k1.utils.randomPrivateKey();
+    hex = bytesToHex(bytes);
+    localStorage.setItem('stackmail_privkey', hex);
+  }
+  return hexToBytes(hex);
+}
+
+function regenerateKey() {
+  localStorage.removeItem('stackmail_privkey');
+  return loadOrCreateKey();
+}
+
+let sessionPrivKey = loadOrCreateKey();
+let sessionPubKeyBytes = secp256k1.getPublicKey(sessionPrivKey, true); // 33 bytes compressed
+let sessionPubKeyHex   = bytesToHex(sessionPubKeyBytes);
+let sessionAddress     = pubkeyToStxAddress(sessionPubKeyBytes);
+
+// Per-session pipe state (resets on page load — ephemeral channel)
+let pipeState = { myBalance: 50_000_000n, serverBalance: 0n, nonce: 0n };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// API helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+const API_BASE = window.location.origin;
+
+async function apiFetch(path, opts = {}) {
+  const r = await fetch(API_BASE + path, opts);
+  return r;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Status tab
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function loadStatus() {
+  const dot   = document.getElementById('health-dot');
+  const label = document.getElementById('health-label');
+
+  try {
+    const r    = await apiFetch('/status');
+    const data = await r.json();
+
+    if (data.ok) {
+      dot.className = 'dot green';
+      label.textContent = 'Stackmail Server — Online';
+    } else {
+      dot.className = 'dot red';
+      label.textContent = 'Server returned error';
+    }
+
+    document.getElementById('s-addr').textContent     = data.serverAddress || '—';
+    document.getElementById('s-contract').textContent = data.sfContract    || '—';
+    document.getElementById('s-price').textContent    = data.messagePriceSats
+      ? `${data.messagePriceSats} sats` : '—';
+    document.getElementById('s-network').textContent  = data.network
+      ? data.network.charAt(0).toUpperCase() + data.network.slice(1) : '—';
+  } catch {
+    dot.className = 'dot red';
+    label.textContent = 'Cannot reach server';
+  }
+}
+
+function updateSessionKeyUI() {
+  document.getElementById('session-addr').textContent   = sessionAddress;
+  document.getElementById('session-pubkey').textContent = sessionPubKeyHex;
+  document.getElementById('inbox-addr').textContent     = sessionAddress;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Inbox tab
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Store decrypted message bodies in memory so they survive re-renders
+const decryptedCache = new Map(); // msgId → { subject, body, secret }
+
+async function loadInbox() {
+  const listEl   = document.getElementById('inbox-list');
+  const statusEl = document.getElementById('inbox-status');
+  const claimed  = document.getElementById('show-claimed-cb').checked;
+
+  statusEl.innerHTML = '<span class="spinner"></span> Loading…';
+  listEl.innerHTML   = '';
+
+  const auth = buildAuthHeader(sessionPrivKey, sessionPubKeyHex, sessionAddress, 'get-inbox');
+
+  try {
+    const r   = await apiFetch(`/inbox?limit=50${claimed ? '&claimed=true' : ''}`, {
+      headers: { 'x-stackmail-auth': auth },
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      statusEl.innerHTML = `<div class="alert alert-error">Error: ${err.message || r.status}</div>`;
+      return;
+    }
+
+    const data = await r.json();
+    statusEl.innerHTML = '';
+    renderInbox(data.messages || []);
+  } catch (e) {
+    statusEl.innerHTML = `<div class="alert alert-error">Failed to load inbox: ${e.message}</div>`;
+  }
+}
+
+function renderInbox(messages) {
+  const listEl = document.getElementById('inbox-list');
+
+  if (!messages.length) {
+    listEl.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">📭</div>
+        <h3>No messages yet</h3>
+        <p>Share your address so people can send you messages:</p>
+        <div class="mono" style="margin-top:8px;font-size:12px;color:var(--accent)">${sessionAddress}</div>
+      </div>`;
+    return;
+  }
+
+  listEl.innerHTML = '';
+
+  for (const msg of messages) {
+    const cached   = decryptedCache.get(msg.id);
+    const itemEl   = document.createElement('div');
+    itemEl.className = 'msg-item';
+    itemEl.dataset.msgId = msg.id;
+
+    const time = new Date(msg.sentAt).toLocaleString();
+
+    if (msg.claimed && cached) {
+      // Show decrypted claimed message
+      itemEl.innerHTML = `
+        <div class="msg-header">
+          <div>
+            <div class="msg-from">From: ${msg.from}</div>
+            <div class="msg-subject">${escHtml(cached.subject || '(no subject)')}</div>
+          </div>
+          <div class="msg-meta">
+            <span class="badge badge-green">✓ Claimed</span>
+            <span class="msg-amount">${msg.amount} sats</span>
+          </div>
+        </div>
+        <div class="msg-body">${escHtml(cached.body)}</div>
+        <div style="margin-top:8px;font-size:11px;color:var(--muted)">${time}</div>`;
+    } else if (msg.claimed) {
+      // Claimed but not in cache — show summary
+      itemEl.innerHTML = `
+        <div class="msg-header">
+          <div>
+            <div class="msg-from">From: ${msg.from}</div>
+          </div>
+          <div class="msg-meta">
+            <span class="badge badge-green">✓ Claimed</span>
+            <span class="msg-amount">${msg.amount} sats</span>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--muted)">${time}</div>`;
+    } else {
+      // Unclaimed — show claim button
+      itemEl.innerHTML = `
+        <div class="msg-header">
+          <div>
+            <div class="msg-from">From: ${msg.from}</div>
+          </div>
+          <div class="msg-meta">
+            <span class="badge badge-purple">Unclaimed</span>
+            <span class="msg-amount">${msg.amount} sats</span>
+          </div>
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:var(--muted)">${time}</div>
+        <div style="margin-top:10px">
+          <button class="btn btn-primary btn-sm claim-btn" data-msg-id="${msg.id}">Claim &amp; Decrypt</button>
+        </div>
+        <div class="claim-status" data-msg-id="${msg.id}"></div>`;
+    }
+
+    listEl.appendChild(itemEl);
+  }
+
+  // Wire up claim buttons
+  listEl.querySelectorAll('.claim-btn').forEach(btn => {
+    btn.addEventListener('click', () => claimMessage(btn.dataset.msgId));
+  });
+}
+
+/**
+ * Claim flow:
+ *   1. GET /inbox/{msgId}/preview  → get encryptedPayload
+ *   2. Decrypt to get { secret, subject, body }
+ *   3. POST /inbox/{msgId}/claim   → reveal secret to server
+ *   4. Re-render the message with decrypted content
+ */
+async function claimMessage(msgId) {
+  const btn      = document.querySelector(`.claim-btn[data-msg-id="${msgId}"]`);
+  const statusEl = document.querySelector(`.claim-status[data-msg-id="${msgId}"]`);
+
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Claiming…'; }
+
+  const auth = buildAuthHeader(sessionPrivKey, sessionPubKeyHex, sessionAddress, 'claim-message', msgId);
+
+  try {
+    // Step 1: fetch the preview (contains encrypted payload)
+    const previewR = await apiFetch(`/inbox/${encodeURIComponent(msgId)}/preview`, {
+      headers: { 'x-stackmail-auth': auth },
+    });
+
+    if (!previewR.ok) {
+      const err = await previewR.json().catch(() => ({}));
+      throw new Error(err.message || `Preview failed: ${previewR.status}`);
+    }
+
+    const preview = await previewR.json();
+
+    // Step 2: decrypt the payload using our session private key
+    const plain = await decryptMail(preview.encryptedPayload, sessionPrivKey);
+    // plain = { v:1, secret, subject?, body }
+
+    // Step 3: reveal the secret to claim the payment
+    const claimAuth = buildAuthHeader(sessionPrivKey, sessionPubKeyHex, sessionAddress, 'claim-message', msgId);
+    const claimR = await apiFetch(`/inbox/${encodeURIComponent(msgId)}/claim`, {
+      method:  'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-stackmail-auth': claimAuth,
+      },
+      body: JSON.stringify({ secret: plain.secret }),
+    });
+
+    if (!claimR.ok) {
+      const err = await claimR.json().catch(() => ({}));
+      throw new Error(err.message || `Claim failed: ${claimR.status}`);
+    }
+
+    // Step 4: cache and re-render
+    decryptedCache.set(msgId, { subject: plain.subject, body: plain.body, secret: plain.secret });
+    await loadInbox();
+
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Claim & Decrypt'; }
+    if (statusEl) statusEl.innerHTML = `<div class="alert alert-error" style="margin-top:8px">${escHtml(e.message)}</div>`;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Compose tab
+// ─────────────────────────────────────────────────────────────────────────────
+
+let recipientInfo = null; // cached payment-info for current `to` address
+
+async function fetchRecipientInfo(toAddr) {
+  const el = document.getElementById('recipient-status');
+  el.textContent = 'Checking…';
+  el.style.color = 'var(--muted)';
+
+  try {
+    const r    = await apiFetch(`/payment-info/${encodeURIComponent(toAddr)}`);
+    const data = await r.json();
+
+    if (!r.ok) {
+      el.innerHTML = `<span style="color:var(--red)">✗ ${escHtml(data.message || data.error || 'Not found')}</span>`;
+      recipientInfo = null;
+      document.getElementById('send-btn').disabled = true;
+      document.getElementById('payment-panel').style.display = 'none';
+      return;
+    }
+
+    recipientInfo = data;
+    el.innerHTML  = `<span style="color:var(--green)">✓ Registered — can receive messages</span>`;
+
+    // Update payment panel
+    document.getElementById('payment-panel').style.display = 'block';
+    document.getElementById('pay-price').textContent   = `${data.amount} sats`;
+    document.getElementById('pay-balance').textContent = `${pipeState.myBalance} sats`;
+    document.getElementById('pay-nonce').textContent   = `${pipeState.nonce}`;
+    document.getElementById('send-btn').disabled = false;
+
+  } catch (e) {
+    el.innerHTML = `<span style="color:var(--red)">✗ ${escHtml(e.message)}</span>`;
+    recipientInfo = null;
+    document.getElementById('send-btn').disabled = true;
+    document.getElementById('payment-panel').style.display = 'none';
+  }
+}
+
+/**
+ * Send flow:
+ *   1. GET /payment-info/{toAddr}      → recipientPublicKey, amount
+ *   2. Generate 32-byte random secret
+ *   3. hashedSecret = hex(sha256(secretBytes))
+ *   4. Encrypt { v:1, secret, subject, body } to recipient's pubkey (ECIES)
+ *   5. Build canonical pipeKey (sender ↔ server)
+ *   6. Build SIP-018 transfer message with updated balances + HTLC
+ *   7. Sign with session key
+ *   8. POST /messages/{toAddr} with payment proof header
+ */
+async function sendMessage() {
+  const toAddr  = document.getElementById('to-input').value.trim();
+  const subject = document.getElementById('subject-input').value.trim();
+  const body    = document.getElementById('body-input').value.trim();
+  const statusEl = document.getElementById('send-status');
+  const sendBtn  = document.getElementById('send-btn');
+
+  if (!toAddr || !body) {
+    statusEl.innerHTML = '<div class="alert alert-warning">Please fill in To and Message fields.</div>';
+    return;
+  }
+
+  // Use cached info or re-fetch
+  if (!recipientInfo) {
+    statusEl.innerHTML = '<div class="alert alert-warning">Please wait for recipient info to load.</div>';
+    return;
+  }
+
+  sendBtn.disabled = true;
+  sendBtn.innerHTML = '<span class="spinner"></span> Sending…';
+  statusEl.innerHTML = '';
+
+  try {
+    const serverAddr = recipientInfo.serverAddress;
+
+    // Step 1: Generate random secret and hash it for HTLC
+    const secretBytes = crypto.getRandomValues(new Uint8Array(32));
+    const secretHex   = bytesToHex(secretBytes);
+    // hashSecret: sha256 of the raw bytes, no 0x prefix
+    const hashedSecretBytes = sha256(secretBytes);
+    const hashedSecretHex   = bytesToHex(hashedSecretBytes);
+
+    // Step 2: Encrypt mail payload for recipient
+    const encryptedPayload = await encryptMail(
+      { v: 1, secret: secretHex, subject: subject || undefined, body },
+      recipientInfo.recipientPublicKey,
+    );
+
+    // Step 3: Update local pipe state (optimistic — no round-trip needed)
+    const price = BigInt(recipientInfo.amount || MSG_PRICE);
+    const newServerBalance = pipeState.serverBalance + price;
+    const newMyBalance     = pipeState.myBalance - price;
+    const newNonce         = pipeState.nonce + 1n;
+
+    // Step 4: Build canonical pipe key (sender ↔ server)
+    // Token is null for the default channel (STX native)
+    const pipeKey = canonicalPipeKey(null, sessionAddress, serverAddr);
+
+    // Step 5: Build the SIP-018 transfer message
+    // We sign from the server's perspective (forPrincipal = server,
+    // which means the server's balance is myBalance in this state).
+    const message = buildTransferMessage({
+      pipeKey,
+      forPrincipal: serverAddr,       // recipient of this state update
+      myBalance:    newServerBalance,  // server's new balance
+      theirBalance: newMyBalance,      // sender's new balance
+      nonce:        newNonce,
+      action:       1n,               // ACTION_TRANSFER
+      actor:        sessionAddress,   // sender is the actor
+      hashedSecret: hashedSecretHex,  // HTLC commitment
+      validAfter:   null,
+    });
+
+    // Step 6: Sign
+    const sig = sip018Sign(SF_CONTRACT, message, sessionPrivKey, CHAIN_ID);
+
+    // Step 7: Build proof object (matches reservoir.ts verifyIncomingPayment)
+    const proof = {
+      contractId:      SF_CONTRACT,
+      pipeKey,
+      forPrincipal:    serverAddr,
+      withPrincipal:   sessionAddress,
+      myBalance:       newServerBalance.toString(),
+      theirBalance:    newMyBalance.toString(),
+      nonce:           newNonce.toString(),
+      action:          '1',
+      actor:           sessionAddress,
+      hashedSecret:    hashedSecretHex,
+      theirSignature:  sig,
+    };
+
+    const paymentHeader = btoa(JSON.stringify(proof));
+
+    // Step 8: POST the message
+    const r = await apiFetch(`/messages/${encodeURIComponent(toAddr)}`, {
+      method:  'POST',
+      headers: {
+        'content-type':          'application/json',
+        'x-stackmail-payment':   paymentHeader,
+      },
+      body: JSON.stringify({
+        from:             sessionAddress,
+        encryptedPayload,
+      }),
+    });
+
+    const data = await r.json().catch(() => ({}));
+
+    if (!r.ok) {
+      throw new Error(data.message || data.error || `Send failed: ${r.status}`);
+    }
+
+    // Commit state update locally
+    pipeState = { myBalance: newMyBalance, serverBalance: newServerBalance, nonce: newNonce };
+
+    // Update payment panel display
+    document.getElementById('pay-balance').textContent = `${pipeState.myBalance} sats`;
+    document.getElementById('pay-nonce').textContent   = `${pipeState.nonce}`;
+
+    statusEl.innerHTML = `
+      <div class="alert alert-success">
+        ✓ Message sent!<br/>
+        <span class="mono" style="font-size:11px">Message ID: ${escHtml(data.messageId || '—')}</span>
+      </div>`;
+
+    // Clear form
+    document.getElementById('body-input').value    = '';
+    document.getElementById('subject-input').value = '';
+
+  } catch (e) {
+    statusEl.innerHTML = `<div class="alert alert-error">✗ ${escHtml(e.message)}</div>`;
+  } finally {
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'Send Message';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Utility
+// ─────────────────────────────────────────────────────────────────────────────
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).catch(() => {
+    // Fallback for older browsers
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity  = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tab switching
+// ─────────────────────────────────────────────────────────────────────────────
+
+function showTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${name}`));
+  if (name === 'inbox') loadInbox();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wire up event listeners
+// ─────────────────────────────────────────────────────────────────────────────
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => showTab(btn.dataset.tab));
+});
+
+document.getElementById('regen-key-btn').addEventListener('click', () => {
+  if (!confirm('Regenerate session key? You will lose access to your current inbox address.')) return;
+  sessionPrivKey     = regenerateKey();
+  sessionPubKeyBytes = secp256k1.getPublicKey(sessionPrivKey, true);
+  sessionPubKeyHex   = bytesToHex(sessionPubKeyBytes);
+  sessionAddress     = pubkeyToStxAddress(sessionPubKeyBytes);
+  pipeState          = { myBalance: 50_000_000n, serverBalance: 0n, nonce: 0n };
+  updateSessionKeyUI();
+});
+
+document.getElementById('copy-session-addr-btn').addEventListener('click', () => {
+  copyToClipboard(sessionAddress);
+  const btn = document.getElementById('copy-session-addr-btn');
+  btn.textContent = 'Copied!';
+  setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+});
+
+document.getElementById('copy-inbox-addr-btn').addEventListener('click', () => {
+  copyToClipboard(sessionAddress);
+  const btn = document.getElementById('copy-inbox-addr-btn');
+  btn.textContent = 'Copied!';
+  setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+});
+
+document.getElementById('refresh-inbox-btn').addEventListener('click', loadInbox);
+
+document.getElementById('show-claimed-cb').addEventListener('change', loadInbox);
+
+document.getElementById('send-btn').addEventListener('click', sendMessage);
+
+// Auto-fetch recipient info when a valid address is entered
+let toDebounceTimer = null;
+document.getElementById('to-input').addEventListener('input', (e) => {
+  const val = e.target.value.trim();
+  recipientInfo = null;
+  document.getElementById('send-btn').disabled = true;
+  document.getElementById('payment-panel').style.display = 'none';
+  document.getElementById('recipient-status').textContent = '';
+
+  clearTimeout(toDebounceTimer);
+  if (val.startsWith('S') && val.length >= 30) {
+    toDebounceTimer = setTimeout(() => fetchRecipientInfo(val), 500);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bootstrap
+// ─────────────────────────────────────────────────────────────────────────────
+
+updateSessionKeyUI();
+loadStatus();
+
+</script>
+</body>
+</html>

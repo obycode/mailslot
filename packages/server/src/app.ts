@@ -7,6 +7,9 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { join, dirname } from 'node:path';
 
 import type { Config } from './types.js';
 import type { MessageStore } from './store.js';
@@ -33,6 +36,8 @@ export function createMailServer(
   paymentService: IPaymentService,
 ): ReturnType<typeof createServer> {
   const sfContractId = config.sfContractId;
+  const __filename = fileURLToPath(import.meta.url);
+  const WEB_DIR = join(dirname(__filename), '..', 'web');
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
 
@@ -252,8 +257,41 @@ export function createMailServer(
     const method = req.method?.toUpperCase() ?? 'GET';
     const path = url.pathname;
 
+    // CORS for web UI
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'content-type, x-stackmail-auth, x-stackmail-payment, x-x402-payment');
+    if (method === 'OPTIONS') {
+      res.writeHead(204); res.end(); return;
+    }
+
     if (method === 'GET' && path === '/health') {
       return json(res, 200, { ok: true });
+    }
+
+    // Status endpoint
+    if (method === 'GET' && path === '/status') {
+      return json(res, 200, {
+        ok: true,
+        serverAddress: config.serverStxAddress,
+        sfContract: config.sfContractId,
+        messagePriceSats: config.messagePriceSats,
+        minFeeSats: config.minFeeSats,
+        network: config.chainId === 1 ? 'mainnet' : 'testnet',
+        chainId: config.chainId,
+      });
+    }
+
+    // Serve web UI
+    if (method === 'GET' && (path === '/' || path === '/ui')) {
+      try {
+        const html = await readFile(join(WEB_DIR, 'index.html'), 'utf-8');
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'content-length': Buffer.byteLength(html) });
+        res.end(html);
+      } catch {
+        res.writeHead(503, { 'content-type': 'text/plain' });
+        res.end('Web UI not available');
+      }
+      return;
     }
 
     const paymentInfoMatch = path.match(/^\/payment-info\/([^/]+)$/);
