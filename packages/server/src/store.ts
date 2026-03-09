@@ -12,10 +12,6 @@ import type {
 export interface MessageStore {
   init(): Promise<void>;
 
-  // Recipient public key registry — populated from auth signatures
-  savePublicKey(stxAddress: string, compressedPubkeyHex: string): Promise<void>;
-  getPublicKey(stxAddress: string): Promise<string | null>;
-
   // Payment info lifecycle (single-use, expires)
   savePendingPaymentInfo(info: {
     paymentId: string;
@@ -73,15 +69,6 @@ export class SqliteMessageStore implements MessageStore {
         value TEXT NOT NULL
       );
 
-      -- Maps STX address → compressed secp256k1 pubkey (hex).
-      -- Populated when a recipient authenticates (their pubkey is recovered
-      -- from the SIP-018 signature and stored here for senders to use).
-      CREATE TABLE IF NOT EXISTS public_keys (
-        stx_address TEXT PRIMARY KEY,
-        pubkey_hex  TEXT NOT NULL,
-        updated_at  INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000)
-      );
-
       -- Single-use payment parameters generated for each send.
       -- Consumed (deleted) when the corresponding message is received.
       CREATE TABLE IF NOT EXISTS pending_payment_info (
@@ -123,22 +110,6 @@ export class SqliteMessageStore implements MessageStore {
   private assertDb(): import('better-sqlite3').Database {
     if (!this.db) throw new Error('Store not initialized — call init() first');
     return this.db;
-  }
-
-  async savePublicKey(stxAddress: string, compressedPubkeyHex: string): Promise<void> {
-    this.assertDb().prepare(`
-      INSERT INTO public_keys (stx_address, pubkey_hex)
-      VALUES (?, ?)
-      ON CONFLICT (stx_address) DO UPDATE SET pubkey_hex = excluded.pubkey_hex,
-                                              updated_at = unixepoch('now') * 1000
-    `).run(stxAddress, compressedPubkeyHex);
-  }
-
-  async getPublicKey(stxAddress: string): Promise<string | null> {
-    const row = this.assertDb()
-      .prepare('SELECT pubkey_hex FROM public_keys WHERE stx_address = ?')
-      .get(stxAddress) as { pubkey_hex: string } | undefined;
-    return row?.pubkey_hex ?? null;
   }
 
   async savePendingPaymentInfo(info: {

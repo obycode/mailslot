@@ -30,29 +30,6 @@ describe('SqliteMessageStore', () => {
     await expect(makeStore().init()).resolves.toBeUndefined();
   });
 
-  describe('public keys', () => {
-    it('returns null for unknown address', async () => {
-      const store = makeStore();
-      await store.init();
-      expect(await store.getPublicKey('SP1UNKNOWN')).toBeNull();
-    });
-
-    it('saves and retrieves a pubkey', async () => {
-      const store = makeStore();
-      await store.init();
-      await store.savePublicKey('SP1ADDR', '0102030405');
-      expect(await store.getPublicKey('SP1ADDR')).toBe('0102030405');
-    });
-
-    it('overwrites pubkey on upsert', async () => {
-      const store = makeStore();
-      await store.init();
-      await store.savePublicKey('SP1ADDR', 'old');
-      await store.savePublicKey('SP1ADDR', 'new');
-      expect(await store.getPublicKey('SP1ADDR')).toBe('new');
-    });
-  });
-
   describe('messages', () => {
     it('saves and retrieves a message', async () => {
       const store = makeStore();

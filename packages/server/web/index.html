@@ -1363,30 +1363,68 @@ function renderInboxMessages(messages) {
 // Compose tab
 // ─────────────────────────────────────────────────────────────────────────────
 
+// recipientInfo holds { recipientPublicKey, serverAddress, amount } once resolved
 let recipientInfo = null;
+
+/**
+ * Look up a recipient's compressed secp256k1 public key from their Stacks
+ * transaction history via the Hiro API. Any transaction they have *sent*
+ * on-chain reveals their public key.
+ *
+ * Returns null if they have no on-chain transaction history yet.
+ *
+ * TODO: Also check BNSv2 zonefile for addresses with BNS names — in the future,
+ * a Stackmail-specific key entry in the zonefile would let recipients publish
+ * a dedicated encryption key without needing prior transaction history.
+ */
+async function lookupRecipientPubkey(addr) {
+  try {
+    const url = `https://api.mainnet.hiro.so/extended/v1/address/${encodeURIComponent(addr)}/transactions?limit=5`;
+    const r   = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!r.ok) return null;
+    const data = await r.json();
+    for (const tx of (data.results || [])) {
+      if (tx.sender_address !== addr) continue; // only txs sent by this address
+      const pk = tx.sender_public_key;
+      if (typeof pk === 'string') {
+        const hex = pk.replace(/^0x/, '');
+        // Valid compressed secp256k1 pubkey: 33 bytes (66 hex chars), starts 02 or 03
+        if (/^0[23][0-9a-f]{64}$/i.test(hex)) return hex;
+      }
+    }
+    return null;
+  } catch { return null; }
+}
 
 async function fetchRecipientInfo(toAddr) {
   const el = document.getElementById('recipient-status');
-  el.innerHTML = '<span class="spinner"></span> Checking…';
+  el.innerHTML = '<span class="spinner"></span> Looking up recipient…';
+
+  const resetErr = (msg) => {
+    el.innerHTML = `<span style="color:var(--red)">✗ ${escHtml(msg)}</span>`;
+    recipientInfo = null;
+    document.getElementById('send-btn').disabled = true;
+    document.getElementById('payment-panel').style.display = 'none';
+  };
 
   try {
-    const r    = await apiFetch(`/payment-info/${encodeURIComponent(toAddr)}`);
-    const data = await r.json();
-
-    if (!r.ok) {
-      el.innerHTML = `<span style="color:var(--red)">✗ ${escHtml(data.message || data.error || 'Not registered')}</span>`;
-      recipientInfo = null;
-      document.getElementById('send-btn').disabled = true;
-      document.getElementById('payment-panel').style.display = 'none';
+    // Recipient public key comes from blockchain tx history (no server registry)
+    const recipientPublicKey = await lookupRecipientPubkey(toAddr);
+    if (!recipientPublicKey) {
+      resetErr('No transaction history found — recipient must have sent at least one Stacks transaction to receive mail.');
       return;
     }
 
-    recipientInfo = data;
-    el.innerHTML  = `<span style="color:var(--green)">✓ Registered — can receive messages</span>`;
+    // Server config (price, address) comes from /status (already cached)
+    const price       = serverStatus.messagePriceSats ?? '1000';
+    const serverAddr  = serverStatus.serverAddress    ?? '';
+
+    recipientInfo = { recipientPublicKey, serverAddress: serverAddr, amount: price };
+    el.innerHTML  = `<span style="color:var(--green)">✓ Public key found — ready to send</span>`;
 
     // Update payment panel
     document.getElementById('payment-panel').style.display = '';
-    document.getElementById('pay-price').textContent   = `${Number(data.amount).toLocaleString()} sats`;
+    document.getElementById('pay-price').textContent   = `${Number(price).toLocaleString()} sats`;
     document.getElementById('pay-balance').textContent = `${pipeState.myBalance.toLocaleString()} sats`;
     document.getElementById('pay-nonce').textContent   = `${pipeState.nonce}`;
 
@@ -1406,10 +1444,7 @@ async function fetchRecipientInfo(toAddr) {
     document.getElementById('send-btn').disabled = false;
 
   } catch (e) {
-    el.innerHTML = `<span style="color:var(--red)">✗ ${escHtml(e.message)}</span>`;
-    recipientInfo = null;
-    document.getElementById('send-btn').disabled = true;
-    document.getElementById('payment-panel').style.display = 'none';
+    resetErr(e.message);
   }
 }
 

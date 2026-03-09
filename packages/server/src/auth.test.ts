@@ -66,11 +66,8 @@ const testConfig: Config = {
 
 /** Minimal in-memory MessageStore stub. */
 function makeMockStore(): MessageStore {
-  const keys = new Map<string, string>();
   return {
     init: async () => {},
-    savePublicKey: async (addr, key) => { keys.set(addr, key); },
-    getPublicKey: async (addr) => keys.get(addr) ?? null,
     savePendingPaymentInfo: async () => {},
     consumePendingPaymentInfo: async () => null,
     saveMessage: async () => {},
@@ -96,17 +93,6 @@ describe('verifyInboxAuth', () => {
     expect(result.pubkeyHex).toBe(compressedPubkeyHex);
     expect(result.payload.address).toBe(address);
     expect(result.payload.action).toBe('get-inbox');
-  });
-
-  it('stores pubkey on first successful auth', async () => {
-    const { privateKey, compressedPubkeyHex } = generateTestKeypair();
-    const address = pubkeyToStxAddress(compressedPubkeyHex);
-    const store = makeMockStore();
-
-    expect(await store.getPublicKey(address)).toBeNull();
-    const header = buildAuthHeader({ pubkey: compressedPubkeyHex, action: 'get-inbox', address, privateKey });
-    await verifyInboxAuth(header, testConfig, store);
-    expect(await store.getPublicKey(address)).toBe(compressedPubkeyHex);
   });
 
   it('rejects an expired timestamp', async () => {

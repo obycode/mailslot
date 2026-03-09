@@ -71,36 +71,38 @@ describe('StackmailClient.getInbox', () => {
 });
 
 describe('StackmailClient.send', () => {
-  it('fetches payment info and posts a message', async () => {
-    const paymentInfo = makePaymentInfo();
+  it('fetches server config and posts a message', async () => {
+    const serverStatus = {
+      ok: true, messagePriceSats: '1000', minFeeSats: '100',
+      serverAddress: 'SP1SERVER', network: 'mainnet',
+    };
     const mockFetch = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(paymentInfo), { status: 200 })) // GET /payment-info
+      .mockResolvedValueOnce(new Response(JSON.stringify(serverStatus), { status: 200 })) // GET /status
       .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, messageId: 'msg-123' }), { status: 200 })); // POST /messages
 
     vi.stubGlobal('fetch', mockFetch);
 
     const client = new StackmailClient(makeConfig());
-    const result = await client.send({ to: 'SP1BOB', body: 'Hello Bob' });
+    const result = await client.send({ to: 'SP1BOB', recipientPublicKey: recipientPubkeyHex, body: 'Hello Bob' });
     expect(result.messageId).toBe('msg-123');
     expect(mockFetch).toHaveBeenCalledTimes(2);
 
-    // First call: GET /payment-info/SP1BOB
-    expect(mockFetch.mock.calls[0][0]).toContain('/payment-info/SP1BOB');
+    // First call: GET /status
+    expect(mockFetch.mock.calls[0][0]).toContain('/status');
     // Second call: POST /messages/SP1BOB
     expect(mockFetch.mock.calls[1][0]).toContain('/messages/SP1BOB');
     expect(mockFetch.mock.calls[1][1]?.method).toBe('POST');
   });
 
-  it('throws StackmailError when recipient is not registered', async () => {
+  it('throws StackmailError when server is unreachable', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ error: 'recipient-not-found' }), { status: 404 }),
+      new Response(JSON.stringify({ error: 'internal-error' }), { status: 500 }),
     ));
 
     const client = new StackmailClient(makeConfig());
-    const err = await client.send({ to: 'SP1UNKNOWN', body: 'Hi' }).catch(e => e);
+    const err = await client.send({ to: 'SP1BOB', recipientPublicKey: recipientPubkeyHex, body: 'Hi' }).catch(e => e);
     expect(err).toBeInstanceOf(StackmailError);
-    expect(err.statusCode).toBe(404);
-    expect(err.reason).toBe('recipient-not-found');
+    expect(err.statusCode).toBe(500);
   });
 });
 

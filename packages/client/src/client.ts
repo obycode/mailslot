@@ -4,11 +4,12 @@
  * Agents poll with client.poll() on a cron/interval. No inbound ports.
  *
  * Send flow:
- *   1. GET /payment-info/{to} → PaymentInfo (recipient pubkey, price)
- *   2. Generate secret R (32 random bytes), compute H = sha256(R)
- *   3. Encrypt { v:1, secret:R, subject, body } with recipient's pubkey → EncryptedMail
- *   4. Build StackFlow payment proof with H embedded (caller-supplied paymentProofBuilder)
- *   5. POST /messages/{to} with proof in header, EncryptedMail in body
+ *   1. Caller supplies recipient's public key (look up from Stacks tx history via Hiro API)
+ *   2. GET /status → server address + message price
+ *   3. Generate secret R (32 random bytes), compute H = sha256(R)
+ *   4. Encrypt { v:1, secret:R, subject, body } with recipient's pubkey → EncryptedMail
+ *   5. Build StackFlow payment proof with H embedded (caller-supplied paymentProofBuilder)
+ *   6. POST /messages/{to} with proof in header, EncryptedMail in body
  *
  * Receive flow (poll):
  *   1. GET /inbox (signed auth) → InboxEntry[]
@@ -60,8 +61,16 @@ export class StackmailClient {
   async send(opts: SendOptions): Promise<{ messageId: string }> {
     const serverUrl = opts.serverUrl ?? this.config.serverUrl;
 
-    // 1. Get recipient's pubkey + payment parameters
-    const paymentInfo = await this.fetchPaymentInfo(opts.to, serverUrl);
+    // 1. Get server config (address, price)
+    const serverConfig = await this.fetchServerConfig(serverUrl);
+    const paymentInfo: PaymentInfo = {
+      recipientPublicKey: opts.recipientPublicKey,
+      amount:             serverConfig.messagePriceSats,
+      fee:                serverConfig.minFeeSats,
+      recipientAmount:    String(BigInt(serverConfig.messagePriceSats) - BigInt(serverConfig.minFeeSats)),
+      stackflowNodeUrl:   serverConfig.stackflowNodeUrl ?? '',
+      serverAddress:      serverConfig.serverAddress,
+    };
 
     // 2. Generate HTLC secret
     const secretBytes = randomBytes(32);
@@ -71,7 +80,7 @@ export class StackmailClient {
     // 3. Encrypt payload (secret + message) with recipient's pubkey
     const encryptedPayload = encryptMail(
       { v: 1, secret: secretHex, subject: opts.subject, body: opts.body },
-      paymentInfo.recipientPublicKey,
+      opts.recipientPublicKey,
     );
 
     // 4. Build payment proof (caller provides StackFlow integration)
@@ -249,13 +258,21 @@ export class StackmailClient {
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
-  private async fetchPaymentInfo(recipientAddr: string, serverUrl: string): Promise<PaymentInfo> {
-    const res = await fetch(`${serverUrl}/payment-info/${encodeURIComponent(recipientAddr)}`, {
-      signal: AbortSignal.timeout(10_000),
-    });
+  private async fetchServerConfig(serverUrl: string): Promise<{
+    messagePriceSats: string;
+    minFeeSats: string;
+    stackflowNodeUrl?: string;
+    serverAddress: string;
+  }> {
+    const res = await fetch(`${serverUrl}/status`, { signal: AbortSignal.timeout(10_000) });
     const data = await res.json().catch(() => ({})) as Record<string, unknown>;
-    if (!res.ok) throw new StackmailError(res.status, String(data['error'] ?? 'payment-info-failed'), data);
-    return data as unknown as PaymentInfo;
+    if (!res.ok) throw new StackmailError(res.status, String(data['error'] ?? 'status-failed'), data);
+    return {
+      messagePriceSats: String(data['messagePriceSats'] ?? '1000'),
+      minFeeSats:       String(data['minFeeSats']       ?? '100'),
+      stackflowNodeUrl: data['stackflowNodeUrl'] as string | undefined,
+      serverAddress:    String(data['serverAddress'] ?? ''),
+    };
   }
 
   private async buildAuthHeader(

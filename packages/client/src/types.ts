@@ -57,6 +57,17 @@ export interface PendingPayment {
 export interface SendOptions {
   /** Recipient STX address */
   to: string;
+  /**
+   * Recipient's compressed secp256k1 public key (33 bytes hex).
+   * Look this up from the Stacks blockchain — any transaction sent by the recipient
+   * reveals their public key via the Hiro API:
+   *   GET https://api.mainnet.hiro.so/extended/v1/address/{addr}/transactions?limit=1
+   *   → results[0].sender_public_key
+   *
+   * Future: BNSv2 zonefiles could carry a dedicated Stackmail encryption key,
+   * allowing recipients to publish a key without needing prior transaction history.
+   */
+  recipientPublicKey: string;
   subject?: string;
   body: string;
   /** Override the default server URL for this send */

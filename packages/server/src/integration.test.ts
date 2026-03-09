@@ -148,27 +148,10 @@ describe('GET /health', () => {
   });
 });
 
-describe('GET /payment-info/:addr', () => {
-  it('returns 404 when recipient has no pubkey registered', async () => {
-    const res = await fetch(`${baseUrl}/payment-info/SP1UNKNOWN`);
-    expect(res.status).toBe(404);
-  });
-
-  it('returns payment info after recipient registers (via auth)', async () => {
-    await store.savePublicKey(recipientAddress, recipientEncryptPubkeyHex);
-
-    const res = await fetch(`${baseUrl}/payment-info/${recipientAddress}`);
-    expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
-    expect(body.recipientPublicKey).toBe(recipientEncryptPubkeyHex);
-    expect(body.amount).toBe('1000');
-  });
-});
-
 describe('full send → inbox → preview → claim flow', () => {
   let messageId: string;
 
-  it('step 1: GET /inbox authenticates and registers pubkey', async () => {
+  it('step 1: GET /inbox authenticates successfully', async () => {
     const authHeader = buildAuthHeader({
       pubkey: recipientSignKeypair.compressedPubkeyHex,
       action: 'get-inbox',
@@ -182,14 +165,10 @@ describe('full send → inbox → preview → claim flow', () => {
     expect(res.status).toBe(200);
     const body = await res.json() as { messages: unknown[] };
     expect(Array.isArray(body.messages)).toBe(true);
-
-    const stored = await store.getPublicKey(recipientAddress);
-    expect(stored).toBe(recipientSignKeypair.compressedPubkeyHex);
   });
 
   it('step 2: POST /messages/:addr sends a message', async () => {
-    await store.savePublicKey(recipientAddress, recipientEncryptPubkeyHex);
-
+    // Sender already has recipient's pubkey (looked up from blockchain, not server)
     const secretHex = randomBytes(32).toString('hex');
     const hashedSecretHex = hashSecret(secretHex);
     const encryptedPayload = encryptMail(
@@ -364,9 +343,7 @@ describe('per-sender HTLC cap', () => {
     await new Promise<void>(r => capServer.listen(0, '127.0.0.1', () => r()));
     const capUrl = `http://127.0.0.1:${(capServer.address() as AddressInfo).port}`;
 
-    // Register recipient
     const capRecipient = pubkeyToStxAddress(recipientSignKeypair.compressedPubkeyHex);
-    await capStore.savePublicKey(capRecipient, recipientEncryptPubkeyHex);
 
     const sendMsg = async () => {
       const secretHex = randomBytes(32).toString('hex');

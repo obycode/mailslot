@@ -20,7 +20,8 @@
  *   2. pubkey hashes to the claimed STX address
  *   3. timestamp is fresh (within authTimestampTtlMs)
  *
- * On first successful auth the pubkey is stored (enables GET /payment-info).
+ * The pubkey is verified but not stored server-side — senders look up recipient
+ * pubkeys from the blockchain (Stacks transaction history via Hiro API).
  */
 
 import { createHash, createVerify } from 'node:crypto';
@@ -207,7 +208,6 @@ async function verifyLegacyAuth(
     throw new AuthError(401, 'invalid signature', 'invalid-signature');
   }
 
-  await store.savePublicKey(payload.address, pubkey).catch(() => {});
   return { payload, pubkeyHex: pubkey };
 }
 
@@ -256,8 +256,6 @@ async function verifyWalletAuth(
   if (!valid) {
     throw new AuthError(401, 'invalid wallet signature', 'invalid-signature');
   }
-
-  await store.savePublicKey(address, pubkey).catch(() => {});
 
   const payload: AuthPayload = {
     action: action as AuthPayload['action'],

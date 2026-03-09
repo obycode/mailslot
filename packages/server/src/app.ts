@@ -41,26 +41,6 @@ export function createMailServer(
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
 
-  async function handlePaymentInfo(res: ServerResponse, recipientAddr: string): Promise<void> {
-    const recipientPublicKey = await store.getPublicKey(recipientAddr);
-
-    if (!recipientPublicKey) {
-      return json(res, 404, {
-        error: 'recipient-not-found',
-        message: 'Recipient has not registered with this mailbox server. They must check their inbox first.',
-      });
-    }
-
-    return json(res, 200, {
-      recipientPublicKey,
-      amount: config.messagePriceSats,
-      fee: config.minFeeSats,
-      recipientAmount: (BigInt(config.messagePriceSats) - BigInt(config.minFeeSats)).toString(),
-      stackflowNodeUrl: config.stackflowNodeUrl,
-      serverAddress: config.serverStxAddress,
-    });
-  }
-
   async function handleSend(req: IncomingMessage, res: ServerResponse, to: string): Promise<void> {
     const paymentHeader = req.headers['x-x402-payment'] ?? req.headers['x-stackmail-payment'];
     if (!paymentHeader) {
@@ -294,11 +274,6 @@ export function createMailServer(
         res.end('Web UI not available');
       }
       return;
-    }
-
-    const paymentInfoMatch = path.match(/^\/payment-info\/([^/]+)$/);
-    if (method === 'GET' && paymentInfoMatch) {
-      return handlePaymentInfo(res, decodeURIComponent(paymentInfoMatch[1]));
     }
 
     const sendMatch = path.match(/^\/messages\/([^/]+)$/);
