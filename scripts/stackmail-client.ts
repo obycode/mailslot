@@ -44,7 +44,8 @@ import { secp256k1 } from '@noble/curves/secp256k1';
 
 export const DEFAULTS = {
   SERVER_URL:    'http://127.0.0.1:8800',
-  SERVER_ADDR:   'SP1RCWQSAF1Q96CPX77Q9EAR236N19P09T6E2KDRE',
+  /** The reservoir contract IS the server's on-chain identity. Taps are opened to this address. */
+  RESERVOIR:     'SP3QFYVTMS0PRJT3K3GMDW9DGR33TDHENSDWVNQMR.sm-reservoir',
   SF_CONTRACT:   'SP3QFYVTMS0PRJT3K3GMDW9DGR33TDHENSDWVNQMR.sm-stackflow',
   TOKEN:         'SP3QFYVTMS0PRJT3K3GMDW9DGR33TDHENSDWVNQMR.sm-test-token',
   CHAIN_ID:      1,
@@ -161,11 +162,30 @@ export function keypairFromPrivkey(privHex: string): Keypair {
 
 // ─── Canonical pipe key ───────────────────────────────────────────────────────
 
+/**
+ * Compute the Clarity consensus-buff representation of a principal.
+ * Standard:  0x05 <version> <hash160>                      (22 bytes)
+ * Contract:  0x06 <version> <hash160> <name_len> <name>    (22 + 1 + n bytes)
+ *
+ * Since 0x05 < 0x06, a standard address is always "less than" a contract principal,
+ * meaning in a Stackmail tap the agent (standard) is always principal-1 and the
+ * reservoir (contract) is always principal-2.
+ */
+function toConsensusBuff(addr: string): Buffer {
+  const dotIdx = addr.indexOf('.');
+  if (dotIdx < 0) {
+    const { version, hash160 } = parseStxAddress(addr);
+    return Buffer.concat([Buffer.from([0x05, version]), hash160]);
+  } else {
+    const { version, hash160 } = parseStxAddress(addr.slice(0, dotIdx));
+    const nameBytes = Buffer.from(addr.slice(dotIdx + 1), 'ascii');
+    return Buffer.concat([Buffer.from([0x06, version]), hash160, Buffer.from([nameBytes.length]), nameBytes]);
+  }
+}
+
 function canonicalPipeKey(token: string, addr1: string, addr2: string) {
-  const { hash160: h1, version: v1 } = parseStxAddress(addr1);
-  const { hash160: h2, version: v2 } = parseStxAddress(addr2);
-  const p1 = Buffer.concat([Buffer.from([0x05, v1]), h1]);
-  const p2 = Buffer.concat([Buffer.from([0x05, v2]), h2]);
+  const p1 = toConsensusBuff(addr1);
+  const p2 = toConsensusBuff(addr2);
   return Buffer.compare(p1, p2) < 0
     ? { token, 'principal-1': addr1, 'principal-2': addr2 }
     : { token, 'principal-1': addr2, 'principal-2': addr1 };
@@ -479,7 +499,7 @@ export async function sendMessage({
   messagePrice?: bigint;
 }): Promise<{ messageId: string; newPipeState: PipeState }> {
   const kp = keypairFromPrivkey(privkeyHex);
-  const serverAddr = DEFAULTS.SERVER_ADDR;
+  const serverAddr = DEFAULTS.RESERVOIR;  // pipe counterparty is the reservoir contract
 
   if (pipeState.myBalance < messagePrice) {
     throw new Error(`Insufficient channel balance: have ${pipeState.myBalance}, need ${messagePrice}`);

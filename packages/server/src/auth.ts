@@ -70,33 +70,18 @@ export function pubkeyToStxAddress(pubkeyHex: string, testnet = false): string {
 const C32_CHARS = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
 function c32encode(data: Buffer): string {
-  let result = '';
-  let carry = 0;
-  let carryBits = 0;
-
-  for (let i = data.length - 1; i >= 0; i--) {
-    const b = data[i];
-    const val = (b << carryBits) | carry;
-    result = C32_CHARS[val & 0x1f] + result;
-    carryBits += 3;
-    carry = b >> (8 - carryBits + 3);
-    if (carryBits >= 5) {
-      result = C32_CHARS[carry & 0x1f] + result;
-      carryBits -= 5;
-      carry = b >> (8 - carryBits);
-    }
+  // Treat data as a big-endian big integer, extract 5-bit chunks.
+  let n = BigInt('0x' + data.toString('hex') || '0');
+  const chars: string[] = [];
+  while (n > 0n) {
+    chars.push(C32_CHARS[Number(n % 32n)]);
+    n /= 32n;
   }
-
-  if (carryBits > 0) {
-    result = C32_CHARS[carry & 0x1f] + result;
-  }
-
-  // Leading zero bytes → leading 0s in c32
+  // Leading zero bytes → leading '0' chars
   for (let i = 0; i < data.length && data[i] === 0; i++) {
-    result = '0' + result;
+    chars.push('0');
   }
-
-  return result;
+  return chars.reverse().join('');
 }
 
 function c32checkEncode(version: number, data: Buffer): string {
