@@ -1,28 +1,35 @@
 /**
- * Inbox authentication
+ * Inbox authentication — two formats supported:
  *
- * Recipients prove ownership of their STX address by signing a challenge
- * with their secp256k1 private key.
- *
- * Auth header: x-stackmail-auth: base64(JSON({ pubkey, payload, signature }))
- *
- * Where:
- *   pubkey:    compressed secp256k1 pubkey (33 bytes hex) corresponding to the STX address
+ * ── Format 1: agent / programmatic (legacy) ───────────────────────────────────
+ * x-stackmail-auth: base64(JSON({ pubkey, payload, signature }))
+ *   pubkey:    compressed secp256k1 pubkey (33 bytes hex)
  *   payload:   { action, address, timestamp, messageId? }
- *   signature: compact ECDSA signature (64 bytes hex: r||s) over sha256(JSON(payload))
+ *   signature: compact ECDSA 64-byte r||s over sha256(JSON.stringify(payload))
  *
- * Server verifies:
- *   1. signature is valid over payload using pubkey
- *   2. pubkey hashes to the claimed STX address (c32-encoded hash160)
+ * ── Format 2: Stacks wallet (SIP-018 structured data) ────────────────────────
+ * x-stackmail-auth: base64(JSON({ type: "sip018", pubkey, message, signature }))
+ *   pubkey:    compressed secp256k1 pubkey (33 bytes hex) from wallet
+ *   message:   TypedMessage { action, address, timestamp, messageId? } (Clarity types)
+ *   signature: 65-byte [recovery, r, s] hex from stx_signStructuredMessage
+ *
+ * SIP-018 auth domain: name="Stackmail", version="0.6.0", chain-id=<chainId>
+ *
+ * In both formats the server verifies:
+ *   1. signature is valid over the payload / message
+ *   2. pubkey hashes to the claimed STX address
  *   3. timestamp is fresh (within authTimestampTtlMs)
  *
- * On first successful auth, the pubkey is stored for the address (enabling
- * GET /payment-info/{addr} to return it for senders).
+ * On first successful auth the pubkey is stored (enables GET /payment-info).
  */
 
 import { createHash, createVerify } from 'node:crypto';
 import type { Config } from './types.js';
 import type { MessageStore } from './store.js';
+import { sip018Verify, type TypedMessage } from './sip018.js';
+
+/** Domain name used for SIP-018 wallet authentication */
+export const AUTH_DOMAIN = 'Stackmail';
 
 export class AuthError extends Error {
   readonly statusCode: number;
@@ -149,14 +156,27 @@ export async function verifyInboxAuth(
   config: Config,
   store: MessageStore,
 ): Promise<AuthResult> {
-  let parsed: { pubkey: string; payload: AuthPayload; signature: string };
+  let parsed: Record<string, unknown>;
   try {
     const json = Buffer.from(authHeader, 'base64').toString('utf-8');
-    parsed = JSON.parse(json) as typeof parsed;
+    parsed = JSON.parse(json) as Record<string, unknown>;
   } catch {
     throw new AuthError(401, 'invalid auth header encoding', 'invalid-auth-encoding');
   }
 
+  // Route to wallet (SIP-018) or legacy auth based on the 'type' field
+  if (parsed['type'] === 'sip018') {
+    return verifyWalletAuth(parsed, config, store);
+  }
+  return verifyLegacyAuth(parsed as { pubkey: string; payload: AuthPayload; signature: string }, config, store);
+}
+
+/** Format 1: raw secp256k1 sig over sha256(JSON(payload)) — for agents */
+async function verifyLegacyAuth(
+  parsed: { pubkey: string; payload: AuthPayload; signature: string },
+  config: Config,
+  store: MessageStore,
+): Promise<AuthResult> {
   const { pubkey, payload, signature } = parsed;
 
   if (!pubkey || typeof pubkey !== 'string') {
@@ -169,32 +189,81 @@ export async function verifyInboxAuth(
     throw new AuthError(401, 'auth header missing signature', 'missing-signature');
   }
 
-  // Timestamp freshness
   const age = Date.now() - payload.timestamp;
   if (age < 0 || age > config.authTimestampTtlMs) {
     throw new AuthError(401, 'auth timestamp expired', 'auth-expired');
   }
 
-  // Verify pubkey corresponds to claimed STX address
   const derivedAddress = pubkeyToStxAddress(pubkey);
   if (derivedAddress !== payload.address) {
-    // Also try testnet
     const derivedTestnet = pubkeyToStxAddress(pubkey, true);
     if (derivedTestnet !== payload.address) {
       throw new AuthError(401, 'pubkey does not match claimed address', 'address-mismatch');
     }
   }
 
-  // Verify signature
   const messageJson = JSON.stringify(payload);
   if (!verifySecp256k1Signature(messageJson, signature, pubkey)) {
     throw new AuthError(401, 'invalid signature', 'invalid-signature');
   }
 
-  // Store pubkey on first successful auth (makes it available for senders)
-  await store.savePublicKey(payload.address, pubkey).catch(() => {
-    // Non-fatal
-  });
+  await store.savePublicKey(payload.address, pubkey).catch(() => {});
+  return { payload, pubkeyHex: pubkey };
+}
 
+/** Format 2: SIP-018 structured data sig from Stacks wallet (stx_signStructuredMessage) */
+async function verifyWalletAuth(
+  parsed: Record<string, unknown>,
+  config: Config,
+  store: MessageStore,
+): Promise<AuthResult> {
+  const pubkey    = typeof parsed['pubkey']    === 'string' ? parsed['pubkey']    : '';
+  const message   = parsed['message'] as TypedMessage | undefined;
+  const signature = typeof parsed['signature'] === 'string' ? parsed['signature'] : '';
+
+  if (!pubkey)    throw new AuthError(401, 'wallet auth missing pubkey',    'missing-pubkey');
+  if (!message)   throw new AuthError(401, 'wallet auth missing message',   'missing-message');
+  if (!signature) throw new AuthError(401, 'wallet auth missing signature', 'missing-signature');
+
+  // Extract payload fields from the TypedMessage
+  const action    = String((message['action']    as { value?: unknown })?.value    ?? '');
+  const address   = String((message['address']   as { value?: unknown })?.value   ?? '');
+  const tsRaw     = (message['timestamp'] as { value?: unknown })?.value;
+  const timestamp = typeof tsRaw === 'bigint' ? Number(tsRaw) : Number(String(tsRaw ?? '0'));
+  const msgIdRaw  = (message['messageId'] as { value?: unknown })?.value;
+  const messageId = msgIdRaw != null ? String(msgIdRaw) : undefined;
+
+  if (!action || !address || !timestamp) {
+    throw new AuthError(401, 'wallet auth message missing required fields', 'invalid-auth-payload');
+  }
+
+  const age = Date.now() - timestamp;
+  if (age < 0 || age > config.authTimestampTtlMs) {
+    throw new AuthError(401, 'auth timestamp expired', 'auth-expired');
+  }
+
+  // Verify pubkey matches claimed address
+  const derivedAddress = pubkeyToStxAddress(pubkey);
+  if (derivedAddress !== address) {
+    const derivedTestnet = pubkeyToStxAddress(pubkey, true);
+    if (derivedTestnet !== address) {
+      throw new AuthError(401, 'pubkey does not match claimed address', 'address-mismatch');
+    }
+  }
+
+  // Verify SIP-018 signature using AUTH_DOMAIN as the contract/domain name
+  const valid = await sip018Verify(AUTH_DOMAIN, message, signature, address, config.chainId);
+  if (!valid) {
+    throw new AuthError(401, 'invalid wallet signature', 'invalid-signature');
+  }
+
+  await store.savePublicKey(address, pubkey).catch(() => {});
+
+  const payload: AuthPayload = {
+    action: action as AuthPayload['action'],
+    address,
+    timestamp,
+    ...(messageId != null ? { messageId } : {}),
+  };
   return { payload, pubkeyHex: pubkey };
 }

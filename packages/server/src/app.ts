@@ -27,7 +27,7 @@ export interface IPaymentService {
   }): Promise<PendingPayment | null>;
   settlePayment(args: { paymentId: string; secret: string; hashedSecret: string }): Promise<void>;
 }
-import { verifyInboxAuth, AuthError } from './auth.js';
+import { verifyInboxAuth, AuthError, AUTH_DOMAIN } from './auth.js';
 import { hashSecret, verifySecretHash } from '@stackmail/crypto';
 
 export function createMailServer(
@@ -278,6 +278,8 @@ export function createMailServer(
         minFeeSats: config.minFeeSats,
         network: config.chainId === 1 ? 'mainnet' : 'testnet',
         chainId: config.chainId,
+        authDomain: AUTH_DOMAIN,
+        sfVersion: '0.6.0',
       });
     }
 
