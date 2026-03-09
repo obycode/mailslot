@@ -32,7 +32,7 @@
       min-height: 100vh;
     }
 
-    /* ── Layout ─────────────────────────────────────────────────────── */
+    /* ── Layout ──────────────────────────────────────────────────────── */
     header {
       background: var(--surface);
       border-bottom: 1px solid var(--border);
@@ -50,6 +50,7 @@
       display: flex;
       align-items: center;
       gap: 8px;
+      text-decoration: none;
     }
 
     .logo-icon {
@@ -79,7 +80,7 @@
     .tab-btn:hover { color: var(--text); background: var(--surface2); }
     .tab-btn.active { color: var(--text); background: var(--surface2); font-weight: 600; }
 
-    main { max-width: 900px; margin: 0 auto; padding: 24px; }
+    main { max-width: 860px; margin: 0 auto; padding: 24px; }
 
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
@@ -94,12 +95,12 @@
     }
 
     .card-title {
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 600;
       color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
 
     .card-value {
@@ -112,24 +113,15 @@
     @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
 
     /* ── Status dot ─────────────────────────────────────────────────── */
-    .status-row {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 24px;
-    }
-
     .dot {
-      width: 12px;
-      height: 12px;
+      width: 10px; height: 10px;
       border-radius: 50%;
       background: var(--muted);
       flex-shrink: 0;
+      display: inline-block;
     }
     .dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
     .dot.red   { background: var(--red);   box-shadow: 0 0 6px var(--red); }
-
-    .status-label { font-size: 18px; font-weight: 600; }
 
     /* ── Buttons ─────────────────────────────────────────────────────── */
     .btn {
@@ -150,6 +142,7 @@
     .btn-primary:hover:not(:disabled) { background: var(--accent-dim); }
     .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
     .btn-secondary:hover:not(:disabled) { background: var(--border2); }
+    .btn-lg { padding: 12px 24px; font-size: 15px; font-weight: 600; }
     .btn-sm { padding: 4px 10px; font-size: 12px; }
     .btn-danger { background: #3d1a1a; color: var(--red); border: 1px solid #5c2222; }
     .btn-danger:hover:not(:disabled) { background: #4d2020; }
@@ -173,7 +166,13 @@
     input[type=text]:focus, textarea:focus { border-color: var(--accent); }
     textarea { resize: vertical; min-height: 100px; }
 
-    /* ── Address + copy ─────────────────────────────────────────────── */
+    /* ── Mono / address ─────────────────────────────────────────────── */
+    .mono {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      word-break: break-all;
+    }
+
     .addr-row {
       display: flex;
       align-items: center;
@@ -182,7 +181,20 @@
       font-family: 'SF Mono', 'Fira Code', monospace;
       color: var(--muted);
       word-break: break-all;
+      flex-wrap: wrap;
     }
+
+    /* ── Badges ─────────────────────────────────────────────────────── */
+    .badge {
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-green  { background: #1a3d2b; color: var(--green); }
+    .badge-purple { background: #1d1847; color: #a08cff; }
+    .badge-yellow { background: #332900; color: var(--yellow); }
+    .badge-muted  { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
 
     /* ── Message items ──────────────────────────────────────────────── */
     .msg-item {
@@ -190,7 +202,7 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 16px;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
 
     .msg-header {
@@ -198,7 +210,6 @@
       align-items: flex-start;
       justify-content: space-between;
       gap: 12px;
-      margin-bottom: 8px;
     }
 
     .msg-from {
@@ -214,43 +225,43 @@
       flex-shrink: 0;
     }
 
-    .badge {
-      padding: 2px 8px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 600;
-    }
-    .badge-green { background: #1a3d2b; color: var(--green); }
-    .badge-purple { background: #1d1847; color: #a08cff; }
-    .badge-yellow { background: #332900; color: var(--yellow); }
+    .msg-amount { font-size: 12px; color: var(--muted); white-space: nowrap; }
 
-    .msg-subject { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
-    .msg-body { color: var(--muted); font-size: 13px; white-space: pre-wrap; }
-    .msg-amount { font-size: 12px; color: var(--muted); }
-
+    /* ── Spinner ─────────────────────────────────────────────────────── */
     .spinner {
       display: inline-block;
-      width: 14px;
-      height: 14px;
+      width: 14px; height: 14px;
       border: 2px solid var(--border);
       border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin 0.6s linear infinite;
     }
+    .spinner-lg {
+      display: block;
+      width: 40px; height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      margin: 0 auto 16px;
+    }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── Alert / notice ─────────────────────────────────────────────── */
+    /* ── Alerts ─────────────────────────────────────────────────────── */
     .alert {
       padding: 12px 16px;
       border-radius: var(--radius);
       font-size: 13px;
       margin-bottom: 16px;
+      line-height: 1.5;
     }
+    .alert:last-child { margin-bottom: 0; }
     .alert-info    { background: #0d1f3c; border: 1px solid #1a3a6e; color: #58a6ff; }
     .alert-success { background: #0d2b1d; border: 1px solid #1a4a33; color: var(--green); }
     .alert-error   { background: #2d0f0f; border: 1px solid #5c2222; color: var(--red); }
     .alert-warning { background: #2b2000; border: 1px solid #4a3800; color: var(--yellow); }
 
+    /* ── Empty state ─────────────────────────────────────────────────── */
     .empty-state {
       text-align: center;
       padding: 48px 24px;
@@ -259,21 +270,39 @@
     .empty-state-icon { font-size: 40px; margin-bottom: 12px; }
     .empty-state h3 { font-size: 16px; color: var(--text); margin-bottom: 8px; }
 
-    /* ── Monospace display ──────────────────────────────────────────── */
-    .mono {
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      font-size: 12px;
-      word-break: break-all;
+    /* ── Full-page panels ────────────────────────────────────────────── */
+    .full-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 60vh;
+      text-align: center;
     }
 
-    .divider {
-      border: none;
-      border-top: 1px solid var(--border);
-      margin: 20px 0;
+    .welcome-icon {
+      width: 64px; height: 64px;
+      background: var(--accent);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      margin: 0 auto 24px;
     }
 
-    .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .spacer { flex: 1; }
+    .welcome-title {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .welcome-sub {
+      color: var(--muted);
+      margin-bottom: 28px;
+      max-width: 420px;
+      line-height: 1.6;
+    }
 
     /* ── Info panel (compose) ───────────────────────────────────────── */
     .info-panel {
@@ -293,8 +322,67 @@
     .info-panel-label { color: var(--muted); }
     .info-panel-value { color: var(--text); font-family: 'SF Mono', 'Fira Code', monospace; }
 
-    /* ── Wallet chip in header ──────────────────────────────────────── */
-    #wallet-chip { display: flex; }
+    /* ── Misc ────────────────────────────────────────────────────────── */
+    .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+    .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .spacer { flex: 1; }
+
+    /* ── Wallet chip in header ───────────────────────────────────────── */
+    #wallet-chip {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 12px;
+      font-family: monospace;
+    }
+
+    /* ── Onboarding ──────────────────────────────────────────────────── */
+    .onboarding-steps {
+      list-style: none;
+      text-align: left;
+      margin: 20px 0;
+    }
+    .onboarding-steps li {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 10px 0;
+      border-top: 1px solid var(--border2);
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .onboarding-steps li:first-child { border-top: none; }
+    .step-num {
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: var(--surface2);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .step-done .step-num {
+      background: var(--green);
+      border-color: var(--green);
+      color: var(--bg);
+    }
+
+    /* ── Status row ──────────────────────────────────────────────────── */
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .status-label { font-size: 18px; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -304,190 +392,264 @@
     <div class="logo-icon">✉</div>
     Stackmail
   </div>
-  <nav>
-    <button class="tab-btn active" data-tab="status">Status</button>
-    <button class="tab-btn" data-tab="inbox">Inbox</button>
+  <nav id="main-nav" style="display:none">
+    <button class="tab-btn active" data-tab="inbox">Inbox</button>
     <button class="tab-btn" data-tab="compose">Compose</button>
+    <button class="tab-btn" data-tab="status">Status</button>
   </nav>
-  <div id="wallet-section" style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+  <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
     <button class="btn btn-secondary btn-sm" id="connect-wallet-btn">Connect Wallet</button>
-    <div id="wallet-chip" style="display:none;align-items:center;gap:6px;padding:5px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;font-size:12px;font-family:monospace;cursor:default;">
+    <div id="wallet-chip">
       <span style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;flex-shrink:0;"></span>
       <span id="wallet-addr-chip">—</span>
-      <button onclick="window._disconnectWallet()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:0 0 0 4px;line-height:1;">&times;</button>
+      <button id="disconnect-btn" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:0 0 0 4px;line-height:1;">&times;</button>
     </div>
   </div>
 </header>
 
 <main>
 
-  <!-- ───────────────────────── STATUS TAB ───────────────────────────── -->
-  <div class="tab-panel active" id="tab-status">
-    <div class="status-row">
-      <div class="dot" id="health-dot"></div>
-      <span class="status-label" id="health-label">Checking server…</span>
+  <!-- ── no-wallet ──────────────────────────────────────────────────── -->
+  <div id="panel-no-wallet" class="full-panel">
+    <div class="welcome-icon">✉</div>
+    <div class="welcome-title">Welcome to Stackmail</div>
+    <div class="welcome-sub">
+      Encrypted, pay-to-send messaging on Bitcoin via Stacks.
+      Connect your Leather or Xverse wallet to get started.
     </div>
-
-    <div class="grid-2" id="status-cards">
-      <div class="card">
-        <div class="card-title">Server Address</div>
-        <div class="card-value mono" id="s-addr">—</div>
-      </div>
-      <div class="card">
-        <div class="card-title">SF Contract</div>
-        <div class="card-value mono" id="s-contract">—</div>
-      </div>
-      <div class="card">
-        <div class="card-title">Message Price</div>
-        <div class="card-value" id="s-price">—</div>
-      </div>
-      <div class="card">
-        <div class="card-title">Network</div>
-        <div class="card-value" id="s-network">—</div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <span id="identity-mode-label" style="font-weight:600">Session Key</span>
-        <span id="identity-mode-badge" class="badge badge-yellow">○ No wallet</span>
-      </div>
-      <div class="card-title" style="margin-bottom:12px">Identity</div>
-      <div class="addr-row" style="margin-bottom:12px">
-        <span id="session-addr">Generating…</span>
-        <button class="btn btn-secondary btn-sm" id="copy-session-addr-btn">Copy</button>
-      </div>
-      <div class="addr-row" style="margin-bottom:16px;color:var(--muted)">
-        <span style="font-size:11px">Pubkey: </span>
-        <span class="mono" id="session-pubkey" style="font-size:11px">—</span>
-      </div>
-      <div class="row" style="gap:8px">
-        <button class="btn btn-secondary btn-sm" id="regen-key-btn">Regenerate Key</button>
-        <button class="btn btn-secondary btn-sm" id="connect-wallet-btn-status">Connect Real Wallet</button>
-      </div>
-      <div class="alert alert-info" style="margin-top:12px;margin-bottom:0">
-        This is an ephemeral secp256k1 keypair stored only in your browser (localStorage).
-        Your STX address is derived from it — share it so others can send you messages.
-        The key never leaves your browser.
-      </div>
+    <button class="btn btn-primary btn-lg" id="connect-wallet-main">Connect Wallet</button>
+    <div id="wallet-error" style="margin-top:16px;max-width:380px"></div>
+    <div style="margin-top:32px;color:var(--muted);font-size:12px;max-width:400px">
+      No wallet?
+      <a href="https://leather.io" target="_blank" rel="noopener" style="color:var(--accent)">Get Leather</a>
+      or
+      <a href="https://xverse.app" target="_blank" rel="noopener" style="color:var(--accent)">Get Xverse</a>
     </div>
   </div>
 
-  <!-- ───────────────────────── INBOX TAB ────────────────────────────── -->
-  <div class="tab-panel" id="tab-inbox">
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-title">Your Inbox Address</div>
-      <div class="addr-row">
-        <span class="mono" id="inbox-addr">—</span>
-        <button class="btn btn-secondary btn-sm" id="copy-inbox-addr-btn">Copy</button>
-      </div>
-      <div style="margin-top:8px;font-size:12px;color:var(--muted)">
-        Share this address so people can send you messages.
-      </div>
-    </div>
-
-    <div class="row" style="margin-bottom:16px">
-      <button class="btn btn-secondary" id="refresh-inbox-btn">⟳ Refresh</button>
-      <label style="margin:0;display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
-        <input type="checkbox" id="show-claimed-cb" /> Show claimed
-      </label>
-    </div>
-
-    <div id="inbox-status"></div>
-    <div id="inbox-list"></div>
+  <!-- ── checking ───────────────────────────────────────────────────── -->
+  <div id="panel-checking" class="full-panel" style="display:none">
+    <div class="spinner-lg"></div>
+    <div style="color:var(--muted)" id="checking-label">Checking your account…</div>
   </div>
 
-  <!-- ───────────────────────── COMPOSE TAB ──────────────────────────── -->
-  <div class="tab-panel" id="tab-compose">
-    <div class="card">
-      <div class="form-group">
-        <label for="to-input">To (STX address)</label>
-        <input type="text" id="to-input" placeholder="SP…" spellcheck="false" autocomplete="off" />
-        <div id="recipient-status" style="margin-top:8px;font-size:13px;color:var(--muted)"></div>
-      </div>
-
-      <div class="form-group">
-        <label for="subject-input">Subject <span style="color:var(--muted)">(optional)</span></label>
-        <input type="text" id="subject-input" placeholder="Hello from Stackmail" />
-      </div>
-
-      <div class="form-group">
-        <label for="body-input">Message</label>
-        <textarea id="body-input" placeholder="Write your message here…"></textarea>
-      </div>
-
-      <div id="payment-panel" style="display:none">
-        <div class="info-panel">
-          <div class="info-panel-row">
-            <span class="info-panel-label">Message price</span>
-            <span class="info-panel-value" id="pay-price">—</span>
-          </div>
-          <div class="info-panel-row">
-            <span class="info-panel-label">Your channel balance</span>
-            <span class="info-panel-value" id="pay-balance">—</span>
-          </div>
-          <div class="info-panel-row">
-            <span class="info-panel-label">Nonce</span>
-            <span class="info-panel-value" id="pay-nonce">—</span>
-          </div>
-        </div>
-        <div id="tap-status" style="margin-top:8px;font-size:12px"></div>
-        <div class="alert alert-info" style="margin-top:10px;margin-bottom:0;font-size:12px">
-          Using an ephemeral StackFlow channel — no on-chain transaction required for testing.
+  <!-- ── no-tap (onboarding) ────────────────────────────────────────── -->
+  <div id="panel-onboarding" style="display:none">
+    <div class="card" style="max-width:600px;margin:0 auto 24px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <span style="font-size:28px">📬</span>
+        <div>
+          <div style="font-size:17px;font-weight:700">Open Your Mailbox</div>
+          <div style="color:var(--muted);font-size:13px">One-time setup to send &amp; receive messages</div>
         </div>
       </div>
 
-      <div id="send-status" style="margin-top:12px"></div>
+      <div id="pending-summary" style="margin-bottom:20px"></div>
 
-      <div style="margin-top:16px">
-        <button class="btn btn-primary" id="send-btn" disabled>Send Message</button>
+      <ul class="onboarding-steps">
+        <li class="step-done">
+          <span class="step-num">✓</span>
+          <div>
+            <strong style="color:var(--text)">Wallet connected</strong><br>
+            <span class="mono" id="onboarding-addr" style="font-size:11px"></span>
+          </div>
+        </li>
+        <li>
+          <span class="step-num">2</span>
+          <div>
+            <strong style="color:var(--text)">Open a payment channel</strong><br>
+            This creates a StackFlow tap between your wallet and the server, funded
+            with borrowed liquidity — no upfront STX needed.
+            Think of it as opening your mailbox and buying stamps at the same time.
+          </div>
+        </li>
+      </ul>
+
+      <div id="open-mailbox-error" style="margin-bottom:12px"></div>
+
+      <button class="btn btn-primary" id="open-mailbox-btn" style="width:100%;justify-content:center;padding:11px">
+        Open Mailbox
+      </button>
+      <div style="margin-top:10px;font-size:12px;color:var(--muted);text-align:center">
+        This will submit an on-chain transaction — gas fees apply.
       </div>
     </div>
   </div>
+
+  <!-- ── tx-pending ─────────────────────────────────────────────────── -->
+  <div id="panel-tx-pending" class="full-panel" style="display:none">
+    <div style="font-size:32px;margin-bottom:16px">🚀</div>
+    <div style="font-size:18px;font-weight:700;margin-bottom:8px">Transaction Submitted</div>
+    <div style="color:var(--muted);margin-bottom:20px;text-align:center">
+      Your mailbox is being opened. This usually confirms within a minute.
+    </div>
+    <div style="margin-bottom:20px">
+      <a id="tx-explorer-link" href="#" target="_blank" rel="noopener"
+         style="color:var(--accent);font-family:monospace;font-size:13px" id="tx-id-display">
+        View on Explorer
+      </a>
+    </div>
+    <div id="tx-status-msg" style="margin-bottom:16px;max-width:380px"></div>
+    <button class="btn btn-primary" id="check-tap-btn">Check Status</button>
+  </div>
+
+  <!-- ── main app ───────────────────────────────────────────────────── -->
+  <div id="panel-main" style="display:none">
+
+    <!-- Inbox tab -->
+    <div class="tab-panel active" id="tab-inbox">
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Your Inbox Address</div>
+        <div class="addr-row">
+          <span class="mono" id="inbox-addr">—</span>
+          <button class="btn btn-secondary btn-sm" id="copy-inbox-addr-btn">Copy</button>
+        </div>
+        <div style="margin-top:6px;font-size:12px;color:var(--muted)">
+          Share this address so others can send you messages.
+        </div>
+      </div>
+
+      <div class="row" style="margin-bottom:16px">
+        <button class="btn btn-secondary" id="refresh-inbox-btn">⟳ Refresh</button>
+        <label style="margin:0;display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+          <input type="checkbox" id="show-claimed-cb" /> Show claimed
+        </label>
+        <div class="spacer"></div>
+        <div id="inbox-count" style="font-size:12px;color:var(--muted)"></div>
+      </div>
+
+      <div id="inbox-status"></div>
+      <div id="inbox-list"></div>
+    </div>
+
+    <!-- Compose tab -->
+    <div class="tab-panel" id="tab-compose">
+      <div class="card">
+        <div class="form-group">
+          <label for="to-input">To (STX address)</label>
+          <input type="text" id="to-input" placeholder="SP…" spellcheck="false" autocomplete="off" />
+          <div id="recipient-status" style="margin-top:8px;font-size:13px;color:var(--muted)"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="subject-input">Subject <span style="color:var(--muted)">(optional, encrypted)</span></label>
+          <input type="text" id="subject-input" placeholder="Hello from Stackmail" />
+        </div>
+
+        <div class="form-group">
+          <label for="body-input">Message <span style="color:var(--muted)">(encrypted end-to-end)</span></label>
+          <textarea id="body-input" placeholder="Write your message here…"></textarea>
+        </div>
+
+        <div id="payment-panel" style="display:none">
+          <div class="info-panel">
+            <div class="info-panel-row">
+              <span class="info-panel-label">Message price</span>
+              <span class="info-panel-value" id="pay-price">—</span>
+            </div>
+            <div class="info-panel-row">
+              <span class="info-panel-label">Your channel balance</span>
+              <span class="info-panel-value" id="pay-balance">—</span>
+            </div>
+            <div class="info-panel-row">
+              <span class="info-panel-label">Nonce</span>
+              <span class="info-panel-value" id="pay-nonce">—</span>
+            </div>
+          </div>
+          <div id="tap-status" style="margin-top:8px;font-size:12px"></div>
+        </div>
+
+        <div id="send-status" style="margin-top:12px"></div>
+
+        <div style="margin-top:16px">
+          <button class="btn btn-primary" id="send-btn" disabled>Send Message</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status tab -->
+    <div class="tab-panel" id="tab-status">
+      <div class="status-row">
+        <div class="dot" id="health-dot"></div>
+        <span class="status-label" id="health-label">Checking server…</span>
+      </div>
+
+      <div class="grid-2" id="status-cards">
+        <div class="card">
+          <div class="card-title">Server Address</div>
+          <div class="card-value mono" id="s-addr">—</div>
+        </div>
+        <div class="card">
+          <div class="card-title">SF Contract</div>
+          <div class="card-value mono" id="s-contract">—</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Message Price</div>
+          <div class="card-value" id="s-price">—</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Network</div>
+          <div class="card-value" id="s-network">—</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Your Identity</div>
+        <div style="margin-bottom:8px">
+          <span class="badge badge-green">● Wallet Connected</span>
+        </div>
+        <div class="addr-row" style="margin-bottom:6px">
+          <span id="status-wallet-addr">—</span>
+          <button class="btn btn-secondary btn-sm" id="copy-status-addr-btn">Copy</button>
+        </div>
+        <div style="font-size:11px;color:var(--muted)">
+          Pubkey: <span class="mono" id="status-wallet-pubkey">—</span>
+        </div>
+        <hr class="divider">
+        <div class="card-title">Channel Status</div>
+        <div id="status-tap-info" style="font-size:13px;color:var(--muted)">Loading…</div>
+      </div>
+    </div>
+
+  </div><!-- /panel-main -->
 
 </main>
 
 <script type="module">
 // ─────────────────────────────────────────────────────────────────────────────
-// External crypto libraries (pinned versions)
+// External crypto libraries (pinned to valid npm versions)
 // ─────────────────────────────────────────────────────────────────────────────
 import { secp256k1 } from 'https://esm.sh/@noble/curves@1.4.0/secp256k1';
-import { sha256 } from 'https://esm.sh/@noble/hashes@1.4.0/sha256';
+import { sha256 }    from 'https://esm.sh/@noble/hashes@1.4.0/sha256';
 import { ripemd160 } from 'https://esm.sh/@noble/hashes@1.4.0/ripemd160';
-import { hkdf } from 'https://esm.sh/@noble/hashes@1.4.0/hkdf';
+import { hkdf }      from 'https://esm.sh/@noble/hashes@1.4.0/hkdf';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Constants
+// Constants — these match the deployed contracts on Stacks mainnet
 // ─────────────────────────────────────────────────────────────────────────────
-// These match the deployed contracts referenced by the server.
 const SF_CONTRACT = 'SP3QFYVTMS0PRJT3K3GMDW9DGR33TDHENSDWVNQMR.sm-stackflow';
-const RESERVOIR  = 'SP3QFYVTMS0PRJT3K3GMDW9DGR33TDHENSDWVNQMR.sm-reservoir';
-const TOKEN       = 'SP3QFYVTMS0PRJT3K3GMDW9DGR33TDHENSDWVNQMR.sm-test-token';
-const CHAIN_ID    = 1;   // mainnet
-const MSG_PRICE   = 1000n;
+const RESERVOIR   = 'SP3QFYVTMS0PRJT3K3GMDW9DGR33TDHENSDWVNQMR.sm-reservoir';
+const CHAIN_ID    = 1; // mainnet; updated from /status if available
 
-// c32 character set (Stacks' base-32 alphabet)
+// c32 character set
 const C32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utility helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Concatenate multiple Uint8Arrays into one */
 function concat(arrs) {
   const total = arrs.reduce((s, a) => s + a.length, 0);
-  const out = new Uint8Array(total);
+  const out   = new Uint8Array(total);
   let off = 0;
   for (const a of arrs) { out.set(a, off); off += a.length; }
   return out;
 }
 
-/** Bytes → lowercase hex string */
 function bytesToHex(b) {
   return Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('');
 }
 
-/** Hex string → Uint8Array */
 function hexToBytes(h) {
   h = h.replace(/^0x/, '');
   const out = new Uint8Array(h.length / 2);
@@ -495,17 +657,13 @@ function hexToBytes(h) {
   return out;
 }
 
-/** Write a big-endian 32-bit unsigned int into a new 4-byte array */
 function u32be(n) {
   const b = new Uint8Array(4);
-  b[0] = (n >>> 24) & 0xff;
-  b[1] = (n >>> 16) & 0xff;
-  b[2] = (n >>>  8) & 0xff;
-  b[3] =  n         & 0xff;
+  b[0] = (n >>> 24) & 0xff; b[1] = (n >>> 16) & 0xff;
+  b[2] = (n >>>  8) & 0xff; b[3] =  n         & 0xff;
   return b;
 }
 
-/** Write a big-endian 128-bit unsigned int (BigInt) into a new 16-byte array */
 function u128be(n) {
   const b = new Uint8Array(16);
   let v = BigInt.asUintN(128, n);
@@ -517,12 +675,7 @@ function u128be(n) {
 // c32check — Stacks address encoding
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Encode raw bytes as a c32 string (Stacks' base-32 variant).
- * Treats input as a big-endian big integer and extracts 5-bit groups.
- */
 function c32encode(data) {
-  // Compute BigInt from bytes
   let n = 0n;
   for (const b of data) { n = (n << 8n) | BigInt(b); }
   if (n === 0n) return '';
@@ -532,34 +685,21 @@ function c32encode(data) {
   return chars.reverse().join('');
 }
 
-/**
- * Derive the Stacks (c32check) address from a 33-byte compressed secp256k1 pubkey.
- * Steps:
- *   1. hash160 = RIPEMD160(SHA256(pubkey))   — standard Bitcoin/Stacks key hash
- *   2. checksum = SHA256(SHA256([version, ...hash160])).slice(0,4)
- *   3. address  = 'S' + C32[version] + c32encode([...hash160, ...checksum])
- *
- * Version 22 = mainnet P2PKH.
- */
 function pubkeyToStxAddress(pubkeyBytes) {
-  const sha   = sha256(pubkeyBytes);          // SHA256 of compressed pubkey
-  const h160  = ripemd160(sha);               // then RIPEMD160
-  const version = 22;                         // Stacks mainnet P2PKH
+  const sha    = sha256(pubkeyBytes);
+  const h160   = ripemd160(sha);
+  const version = 22; // mainnet P2PKH
   const payload = concat([new Uint8Array([version]), h160]);
   const h1      = sha256(payload);
-  const checksum = sha256(h1).slice(0, 4);    // double-SHA256 checksum
+  const checksum = sha256(h1).slice(0, 4);
   const full     = concat([h160, checksum]);
   return 'S' + C32[version & 0x1f] + c32encode(full);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// c32 decoding — needed to serialize principals for SIP-018
+// c32 decoding — for Clarity serialization
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Decode a c32-encoded string into exactly `expectedBytes` bytes.
- * Processes characters right-to-left, accumulating 5-bit chunks into bytes.
- */
 function c32DecodeFixed(encoded, expectedBytes) {
   const result = new Uint8Array(expectedBytes);
   let carry = 0, carryBits = 0, byteIdx = expectedBytes - 1;
@@ -577,38 +717,20 @@ function c32DecodeFixed(encoded, expectedBytes) {
   return result;
 }
 
-/**
- * Parse an SP.../ST... address into { version, hash160 }.
- * Also handles contract principals (addr.contract-name) by stripping the suffix.
- */
 function parseStxAddress(address) {
   const dotIdx = address.indexOf('.');
   const addr   = dotIdx >= 0 ? address.slice(0, dotIdx) : address;
   if (!addr.startsWith('S')) throw new Error(`Invalid STX address: ${addr}`);
   const version = C32.indexOf(addr[1].toUpperCase());
   if (version < 0) throw new Error(`Invalid version char: ${addr[1]}`);
-  // 24 bytes = 20-byte hash160 + 4-byte checksum
   const decoded = c32DecodeFixed(addr.slice(2), 24);
   return { version, hash160: decoded.slice(0, 20) };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Clarity value serialization
-// Matches the server's packages/server/src/sip018.ts
+// Clarity value serialization — matches packages/server/src/sip018.ts
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Serialize a Clarity value to its consensus-encoding.
- * Type tags:
- *   0x01 = uint (16 bytes BE)
- *   0x02 = buff
- *   0x05 = standard principal
- *   0x06 = contract principal
- *   0x09 = none
- *   0x0a = some(v)
- *   0x0c = tuple (field-sorted by name)
- *   0x0d = string-ascii
- */
 function serializeClarityValue(cv) {
   switch (cv.type) {
     case 'uint':
@@ -617,11 +739,9 @@ function serializeClarityValue(cv) {
     case 'principal': {
       const dotIdx = cv.value.indexOf('.');
       if (dotIdx < 0) {
-        // Standard principal: [0x05, version, hash160(20)]
         const { version, hash160 } = parseStxAddress(cv.value);
         return concat([new Uint8Array([0x05, version]), hash160]);
       } else {
-        // Contract principal: [0x06, version, hash160, nameLen, name]
         const base = cv.value.slice(0, dotIdx);
         const name = new TextEncoder().encode(cv.value.slice(dotIdx + 1));
         const { version, hash160 } = parseStxAddress(base);
@@ -646,9 +766,8 @@ function serializeClarityValue(cv) {
     }
 
     case 'tuple': {
-      // Tuple fields MUST be sorted lexicographically by name
       const names = Object.keys(cv.fields).sort();
-      const parts = [new Uint8Array([0x0c]), u32be(names.length)];
+      const parts  = [new Uint8Array([0x0c]), u32be(names.length)];
       for (const name of names) {
         const nb = new TextEncoder().encode(name);
         parts.push(new Uint8Array([nb.length]), nb, serializeClarityValue(cv.fields[name]));
@@ -662,64 +781,43 @@ function serializeClarityValue(cv) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SIP-018 hashing and signing
-// Matches packages/server/src/sip018.ts
+// SIP-018 — hashing and signing
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SIP018_PREFIX = new TextEncoder().encode('SIP018');
 const SF_VERSION    = '0.6.0';
 
-/**
- * Build the domain tuple for SIP-018 structured data.
- * Domain distinguishes signed messages from different contracts and versions.
- */
 function buildDomain(contractId, chainId) {
   return {
     type: 'tuple',
     fields: {
-      'chain-id': { type: 'uint', value: BigInt(chainId) },
+      'chain-id': { type: 'uint',         value: BigInt(chainId) },
       name:       { type: 'string-ascii', value: contractId },
       version:    { type: 'string-ascii', value: SF_VERSION },
     },
   };
 }
 
-/**
- * Compute the SIP-018 hash:
- *   sha256("SIP018" || sha256(serialize(domain)) || sha256(serialize(message)))
- *
- * This is what the signer commits to; recovery of the pubkey from the signature
- * allows the server to verify without a public-key lookup.
- */
 function computeSip018Hash(contractId, message, chainId) {
   const domainHash  = sha256(serializeClarityValue(buildDomain(contractId, chainId)));
   const messageHash = sha256(serializeClarityValue(message));
   return sha256(concat([SIP018_PREFIX, domainHash, messageHash]));
 }
 
-/**
- * Sign a SIP-018 message tuple.
- * Returns a 65-byte hex string: [recovery_id (0|1), r (32), s (32)].
- * The recovery_id lets the verifier reconstruct the pubkey without storing it.
- */
 function sip018Sign(contractId, message, privKeyBytes, chainId) {
-  const hash = computeSip018Hash(contractId, message, chainId);
-  // lowS = true produces canonical signatures (matches server expectation)
-  const sig  = secp256k1.sign(hash, privKeyBytes, { lowS: true });
-  const compact = sig.toCompactRawBytes(); // 64 bytes: r || s
-  const full = new Uint8Array(65);
-  full[0] = sig.recovery ?? 0;
+  const hash    = computeSip018Hash(contractId, message, chainId);
+  const sig     = secp256k1.sign(hash, privKeyBytes, { lowS: true });
+  const compact = sig.toCompactRawBytes();
+  const full    = new Uint8Array(65);
+  full[0]       = sig.recovery ?? 0;
   full.set(compact, 1);
   return '0x' + bytesToHex(full);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Canonical pipe key ordering
-// Two principals forming a StackFlow channel are always stored in a canonical
-// order (lexicographic on their consensus-buff encoding), so both sides agree.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Convert an STX address (or contract principal) to its consensus encoding bytes */
 function toConsensusBuff(addr) {
   if (!addr.includes('.')) {
     const { version, hash160 } = parseStxAddress(addr);
@@ -732,10 +830,6 @@ function toConsensusBuff(addr) {
   }
 }
 
-/**
- * Return the canonical pipeKey — principal-1 is whichever sorts first
- * by their consensus-buff encoding. This matches how the server orders them.
- */
 function canonicalPipeKey(token, a, b) {
   const pa = toConsensusBuff(a), pb = toConsensusBuff(b);
   for (let i = 0; i < Math.min(pa.length, pb.length); i++) {
@@ -746,158 +840,57 @@ function canonicalPipeKey(token, a, b) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Build the StackFlow transfer message tuple
-// The message encodes the new channel state after the payment.
+// StackFlow transfer message builder
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Build the Clarity tuple for a StackFlow HTLC transfer.
- * - forPrincipal: who this state update is FROM (the actor's counterpart)
- * - balance-1/balance-2: ordered per canonical pipeKey
- */
 function buildTransferMessage({ pipeKey, forPrincipal, myBalance, theirBalance, nonce, action, actor, hashedSecret, validAfter }) {
-  // Determine which balance slot belongs to which principal
   const localIsPrincipal1 = pipeKey['principal-1'] === forPrincipal;
   const balance1 = localIsPrincipal1 ? myBalance : theirBalance;
   const balance2 = localIsPrincipal1 ? theirBalance : myBalance;
-
   return {
     type: 'tuple',
     fields: {
-      'principal-1': { type: 'principal', value: pipeKey['principal-1'] },
-      'principal-2': { type: 'principal', value: pipeKey['principal-2'] },
-      token: pipeKey.token == null
-        ? { type: 'none' }
-        : { type: 'some', value: { type: 'principal', value: pipeKey.token } },
-      'balance-1': { type: 'uint', value: balance1 },
-      'balance-2': { type: 'uint', value: balance2 },
-      nonce:       { type: 'uint', value: nonce },
-      action:      { type: 'uint', value: action },
-      actor:       { type: 'principal', value: actor },
+      'principal-1':  { type: 'principal', value: pipeKey['principal-1'] },
+      'principal-2':  { type: 'principal', value: pipeKey['principal-2'] },
+      token:          pipeKey.token == null
+                        ? { type: 'none' }
+                        : { type: 'some', value: { type: 'principal', value: pipeKey.token } },
+      'balance-1':    { type: 'uint', value: balance1 },
+      'balance-2':    { type: 'uint', value: balance2 },
+      nonce:          { type: 'uint', value: nonce },
+      action:         { type: 'uint', value: action },
+      actor:          { type: 'principal', value: actor },
       'hashed-secret': hashedSecret == null
-        ? { type: 'none' }
-        : { type: 'some', value: { type: 'buff', value: hashedSecret } },
-      'valid-after': validAfter == null
-        ? { type: 'none' }
-        : { type: 'some', value: { type: 'uint', value: validAfter } },
+                        ? { type: 'none' }
+                        : { type: 'some', value: { type: 'buff', value: hashedSecret } },
+      'valid-after':  validAfter == null
+                        ? { type: 'none' }
+                        : { type: 'some', value: { type: 'uint', value: validAfter } },
     },
   };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Auth header builder
-// Matches the server's verifyInboxAuth() in auth.ts:
-//   header = base64(JSON({ pubkey, payload, signature }))
-//   signature = compact ECDSA (64-byte r||s hex) over sha256(JSON(payload))
-// ─────────────────────────────────────────────────────────────────────────────
-
-function buildAuthHeader(privKeyBytes, pubKeyHex, address, action, messageId) {
-  const payload = { action, address, timestamp: Date.now() };
-  if (messageId) payload.messageId = messageId;
-
-  const msgJson = JSON.stringify(payload);
-  // Server verifies: verifySecp256k1Signature(JSON.stringify(payload), sig, pubkey)
-  const msgHash = sha256(new TextEncoder().encode(msgJson));
-  const sig     = secp256k1.sign(msgHash, privKeyBytes, { lowS: true });
-  const sigHex  = bytesToHex(sig.toCompactRawBytes()); // 64-byte compact r||s
-
-  return btoa(JSON.stringify({ pubkey: pubKeyHex, payload, signature: sigHex }));
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ECIES encryption — matches packages/crypto/src/index.ts
-//
-// Scheme:
-//   1. Ephemeral secp256k1 keypair (esk, epk)
-//   2. shared = ECDH(esk, recipientPubkey)  — x-coordinate only (32 bytes)
-//   3. key    = HKDF-SHA256(shared, salt="stackmail-v1", info="encrypt", len=32)
-//   4. iv     = random 12 bytes
-//   5. ciphertext || authTag = AES-256-GCM(key, iv, JSON(payload))
-//   6. output = { v:1, epk (hex), iv (hex), data: ciphertext||authTag (hex) }
+// ECIES encryption — used when sending messages
+// Scheme: ephemeral ECDH + HKDF-SHA256 + AES-256-GCM
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function encryptMail(payload, recipientPubkeyHex) {
-  // Ephemeral sender keypair
-  const eskBytes = secp256k1.utils.randomPrivateKey();  // 32 random bytes
-  const epkBytes = secp256k1.getPublicKey(eskBytes, true); // 33-byte compressed
-
-  // ECDH shared secret — noble returns 33-byte compressed point;
-  // Node's ECDH (used on server) returns x-coordinate only (32 bytes).
-  // So we slice off the prefix byte to match the server's derive key.
-  const recipientPub = hexToBytes(recipientPubkeyHex.replace(/^0x/,''));
-  const sharedFull = secp256k1.getSharedSecret(eskBytes, recipientPub, true); // 33 bytes: [02/03, x...]
-  const sharedX    = sharedFull.slice(1); // 32-byte x-coordinate
-
-  // HKDF-SHA256 key derivation (same parameters as server)
-  const salt = new TextEncoder().encode('stackmail-v1');
-  const info = new TextEncoder().encode('encrypt');
-  const key  = hkdf(sha256, sharedX, salt, info, 32); // 32-byte AES key
-
-  // AES-256-GCM encryption via WebCrypto
+  const eskBytes   = secp256k1.utils.randomPrivateKey();
+  const epkBytes   = secp256k1.getPublicKey(eskBytes, true);
+  const recipientPub = hexToBytes(recipientPubkeyHex.replace(/^0x/, ''));
+  // noble returns 33-byte compressed; Node ECDH returns x only (32 bytes) — slice off prefix
+  const sharedFull = secp256k1.getSharedSecret(eskBytes, recipientPub, true);
+  const sharedX    = sharedFull.slice(1);
+  const salt       = new TextEncoder().encode('stackmail-v1');
+  const info       = new TextEncoder().encode('encrypt');
+  const key        = hkdf(sha256, sharedX, salt, info, 32);
   const iv         = crypto.getRandomValues(new Uint8Array(12));
   const plaintext  = new TextEncoder().encode(JSON.stringify(payload));
   const cryptoKey  = await crypto.subtle.importKey('raw', key, 'AES-GCM', false, ['encrypt']);
-  // WebCrypto returns ciphertext + 16-byte auth tag concatenated
   const encrypted  = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, cryptoKey, plaintext));
-
-  return {
-    v: 1,
-    epk:  bytesToHex(epkBytes),
-    iv:   bytesToHex(iv),
-    data: bytesToHex(encrypted), // ciphertext || authTag
-  };
+  return { v: 1, epk: bytesToHex(epkBytes), iv: bytesToHex(iv), data: bytesToHex(encrypted) };
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ECIES decryption — reverse of encryptMail
-// ─────────────────────────────────────────────────────────────────────────────
-
-async function decryptMail(encrypted, privKeyBytes) {
-  const epkBytes  = hexToBytes(encrypted.epk);
-  const iv        = hexToBytes(encrypted.iv);
-  const combined  = hexToBytes(encrypted.data);  // ciphertext || authTag (16 bytes at end)
-
-  // Recover x-coordinate of shared secret (matches Node ECDH output)
-  const sharedFull = secp256k1.getSharedSecret(privKeyBytes, epkBytes, true);
-  const sharedX    = sharedFull.slice(1);
-
-  const salt = new TextEncoder().encode('stackmail-v1');
-  const info = new TextEncoder().encode('encrypt');
-  const key  = hkdf(sha256, sharedX, salt, info, 32);
-
-  const cryptoKey = await crypto.subtle.importKey('raw', key, 'AES-GCM', false, ['decrypt']);
-  // WebCrypto expects ciphertext+authTag in one buffer
-  const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, cryptoKey, combined);
-  return JSON.parse(new TextDecoder().decode(plaintext));
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Session key management
-// One ephemeral secp256k1 keypair per browser session (localStorage).
-// ─────────────────────────────────────────────────────────────────────────────
-
-function loadOrCreateKey() {
-  let hex = localStorage.getItem('stackmail_privkey');
-  if (!hex) {
-    const bytes = secp256k1.utils.randomPrivateKey();
-    hex = bytesToHex(bytes);
-    localStorage.setItem('stackmail_privkey', hex);
-  }
-  return hexToBytes(hex);
-}
-
-function regenerateKey() {
-  localStorage.removeItem('stackmail_privkey');
-  return loadOrCreateKey();
-}
-
-let sessionPrivKey = loadOrCreateKey();
-let sessionPubKeyBytes = secp256k1.getPublicKey(sessionPrivKey, true); // 33 bytes compressed
-let sessionPubKeyHex   = bytesToHex(sessionPubKeyBytes);
-let sessionAddress     = pubkeyToStxAddress(sessionPubKeyBytes);
-
-// Per-session pipe state (resets on page load — ephemeral channel)
-let pipeState = { myBalance: 50_000_000n, serverBalance: 0n, nonce: 0n };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Wallet state
@@ -905,16 +898,9 @@ let pipeState = { myBalance: 50_000_000n, serverBalance: 0n, nonce: 0n };
 
 let walletProvider = null;
 let walletAddress  = null;
-let walletPubkey   = null;     // hex compressed pubkey from wallet
-let serverStatus   = {};       // cached /status response
-
-function isWalletMode() { return !!walletAddress; }
-function activeAddress() { return walletAddress || sessionAddress; }
-function activePubkey()  { return walletPubkey  || sessionPubKeyHex; }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Wallet detection
-// ─────────────────────────────────────────────────────────────────────────────
+let walletPubkey   = null;
+let serverStatus   = {};
+let pipeState      = { myBalance: 0n, serverBalance: 0n, nonce: 0n };
 
 function detectWalletProvider() {
   return window.StacksProvider
@@ -925,24 +911,37 @@ function detectWalletProvider() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Connect / disconnect wallet
+// App state machine
+// States: no-wallet | checking | no-tap | tx-pending | ready
+// ─────────────────────────────────────────────────────────────────────────────
+
+function setAppState(state) {
+  document.getElementById('panel-no-wallet').style.display  = state === 'no-wallet'  ? '' : 'none';
+  document.getElementById('panel-checking').style.display   = state === 'checking'   ? '' : 'none';
+  document.getElementById('panel-onboarding').style.display = state === 'no-tap'     ? '' : 'none';
+  document.getElementById('panel-tx-pending').style.display = state === 'tx-pending' ? '' : 'none';
+  document.getElementById('panel-main').style.display       = state === 'ready'      ? '' : 'none';
+  document.getElementById('main-nav').style.display         = state === 'ready'      ? '' : 'none';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Connect wallet
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function connectWallet() {
   const provider = detectWalletProvider();
   if (!provider) {
-    alert('No Stacks wallet detected.\n\nInstall Leather (leather.io) or Xverse (xverse.app) and refresh the page.');
+    document.getElementById('wallet-error').innerHTML =
+      '<div class="alert alert-warning">No Stacks wallet detected. Install <a href="https://leather.io" target="_blank" style="color:inherit">Leather</a> or <a href="https://xverse.app" target="_blank" style="color:inherit">Xverse</a> and refresh.</div>';
     return;
   }
-  const connectBtn       = document.getElementById('connect-wallet-btn');
-  const connectBtnStatus = document.getElementById('connect-wallet-btn-status');
-  if (connectBtn)       { connectBtn.disabled = true;       connectBtn.textContent = 'Connecting…'; }
-  if (connectBtnStatus) { connectBtnStatus.disabled = true; connectBtnStatus.textContent = 'Connecting…'; }
+
+  const btns = document.querySelectorAll('#connect-wallet-btn, #connect-wallet-main');
+  btns.forEach(b => { b.disabled = true; b.textContent = 'Connecting…'; });
+
   try {
-    // stx_getAddresses returns the user's STX addresses + public keys
     const resp = await provider.request('stx_getAddresses');
     const addresses = resp?.result?.addresses ?? resp?.addresses ?? [];
-    // Prefer mainnet (SP prefix) or first available
     const acct = addresses.find(a => a.address?.startsWith('SP'))
                || addresses.find(a => a.address?.startsWith('ST'))
                || addresses[0];
@@ -950,15 +949,12 @@ async function connectWallet() {
     walletAddress  = acct.address;
     walletPubkey   = acct.publicKey;
     walletProvider = provider;
-    // Reset pipe state for new address
-    pipeState = { myBalance: 50_000_000n, serverBalance: 0n, nonce: 0n };
-    updateIdentityUI();
-    updateWalletHeaderUI();
+    updateWalletUI();
+    await onWalletConnected();
   } catch (e) {
-    alert('Connection failed: ' + e.message);
-  } finally {
-    if (connectBtn)       { connectBtn.disabled = false;       connectBtn.textContent = 'Connect Wallet'; }
-    if (connectBtnStatus) { connectBtnStatus.disabled = false; connectBtnStatus.textContent = 'Connect Real Wallet'; }
+    document.getElementById('wallet-error').innerHTML =
+      `<div class="alert alert-error">Connection failed: ${escHtml(e.message)}</div>`;
+    btns.forEach(b => { b.disabled = false; b.textContent = 'Connect Wallet'; });
   }
 }
 
@@ -966,27 +962,76 @@ function disconnectWallet() {
   walletProvider = null;
   walletAddress  = null;
   walletPubkey   = null;
-  updateIdentityUI();
-  updateWalletHeaderUI();
+  pipeState      = { myBalance: 0n, serverBalance: 0n, nonce: 0n };
+  updateWalletUI();
+  setAppState('no-wallet');
 }
 
-// Expose globally so the inline onclick in the wallet chip can reach it
-window._disconnectWallet = disconnectWallet;
+function updateWalletUI() {
+  const chip       = document.getElementById('wallet-chip');
+  const connectBtn = document.getElementById('connect-wallet-btn');
+  if (walletAddress) {
+    chip.style.display = 'flex';
+    connectBtn.style.display = 'none';
+    document.getElementById('wallet-addr-chip').textContent =
+      walletAddress.slice(0, 8) + '…' + walletAddress.slice(-4);
+  } else {
+    chip.style.display = 'none';
+    connectBtn.style.display = '';
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Wallet auth (SIP-018 structured data)
+// After wallet connects: register with server, check tap, route to state
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Build a SIP-018 auth header signed by the connected wallet.
-// Domain: { 'chain-id': u<chainId>, name: <authDomain>, version: '0.6.0' }
-// Message: { action: string-ascii, address: principal, timestamp: uint, [messageId: string-ascii] }
+async function onWalletConnected() {
+  setAppState('checking');
+  document.getElementById('checking-label').textContent = 'Registering with server…';
+
+  // Register pubkey + fetch pending messages via inbox auth
+  let pendingMessages = [];
+  try {
+    const auth = await buildWalletAuthHeader('get-inbox');
+    const r    = await fetch('/inbox?limit=50', { headers: { 'x-stackmail-auth': auth } });
+    if (r.ok) {
+      const data = await r.json();
+      pendingMessages = (data.messages || []).filter(m => !m.claimed);
+    }
+  } catch { /* registration optional if server unreachable */ }
+
+  document.getElementById('checking-label').textContent = 'Checking payment channel…';
+
+  // Check on-chain tap (pipe between wallet and reservoir)
+  const tap = await queryOnChainTap(walletAddress);
+
+  if (!tap) {
+    // Show onboarding with pending count
+    document.getElementById('onboarding-addr').textContent = walletAddress;
+    updateOnboardingPendingSummary(pendingMessages);
+    setAppState('no-tap');
+  } else {
+    // Tap is open — update local pipe state and go to inbox
+    pipeState = { myBalance: tap.userBalance, serverBalance: tap.reservoirBalance, nonce: tap.nonce };
+    updateIdentityUI();
+    setAppState('ready');
+    showTab('inbox');
+    renderInboxMessages(pendingMessages);
+    loadInbox(); // full refresh in background
+    loadStatus();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wallet auth (SIP-018 structured data) — Format 2 in auth.ts
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function buildWalletAuthHeader(action, messageId) {
   const ts         = Date.now();
   const chainId    = serverStatus.chainId    ?? CHAIN_ID;
   const authDomain = serverStatus.authDomain ?? 'Stackmail';
   const sfVersion  = serverStatus.sfVersion  ?? '0.6.0';
 
-  // TypedMessage (flat, for the server's verifyWalletAuth)
   const msgFields = {
     action:    { type: 'string-ascii', value: action },
     address:   { type: 'principal',   value: walletAddress },
@@ -994,8 +1039,7 @@ async function buildWalletAuthHeader(action, messageId) {
     ...(messageId ? { messageId: { type: 'string-ascii', value: messageId } } : {}),
   };
 
-  // Wallet expects Clarity-JSON wrapped in tuples
-  const domain = {
+  const domain  = {
     type: 'tuple', data: {
       'chain-id': { type: 'uint',         value: String(chainId) },
       name:       { type: 'string-ascii', value: authDomain },
@@ -1017,25 +1061,13 @@ async function buildWalletAuthHeader(action, messageId) {
   const pubkey    = resp?.result?.publicKey  ?? resp?.publicKey  ?? walletPubkey;
   if (!signature) throw new Error('Wallet returned no signature');
 
-  // Auth header for server (Format 2)
   return btoa(JSON.stringify({ type: 'sip018', pubkey, message: msgFields, signature }));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Unified auth builder
+// Wallet SIP-018 signing for payment proofs (compose flow)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Returns an auth header using wallet (SIP-018) or session key (raw ECDSA)
-async function buildActiveAuthHeader(action, messageId) {
-  if (isWalletMode()) return buildWalletAuthHeader(action, messageId);
-  return buildAuthHeader(sessionPrivKey, sessionPubKeyHex, sessionAddress, action, messageId);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Wallet SIP-018 signing for payment proofs
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Convert a server-side TypedField to the Clarity JSON format wallets expect.
 function typedFieldToWalletCV(f) {
   switch (f.type) {
     case 'uint':         return { type: 'uint',         value: String(f.value) };
@@ -1048,11 +1080,9 @@ function typedFieldToWalletCV(f) {
   }
 }
 
-// Sign a SIP-018 transfer message with the connected wallet.
-// Returns a 65-byte hex signature (0x-prefixed): [recovery, r, s].
-async function sip018SignWithWallet(contractId, typedMessage, chainId) {
+async function sip018SignWithWallet(contractId, typedMessageFields, chainId) {
   const msgData = {};
-  for (const [k, v] of Object.entries(typedMessage)) {
+  for (const [k, v] of Object.entries(typedMessageFields)) {
     msgData[k] = typedFieldToWalletCV(v);
   }
   const domain = {
@@ -1080,148 +1110,175 @@ async function sip018SignWithWallet(contractId, typedMessage, chainId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// On-chain tap state query
+// On-chain tap check — queries sm-stackflow for user ↔ reservoir pipe
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function queryOnChainTap(aliceAddr) {
+async function queryOnChainTap(userAddr) {
   try {
-    const pipeKey = canonicalPipeKey(TOKEN, aliceAddr, RESERVOIR);
-    const tokenCV  = pipeKey.token ? ('0a' + cvPrincipalHex(pipeKey.token)) : '09';
-    const argHex   = '0x' + cvTupleHex({
+    // Try token=none (STX) first, then no token specified
+    const pipeKey = canonicalPipeKey(null, userAddr, RESERVOIR);
+    const tokenCV = '09'; // none
+    const argHex  = '0x' + cvTupleHex({
       'principal-1': cvPrincipalHex(pipeKey['principal-1']),
       'principal-2': cvPrincipalHex(pipeKey['principal-2']),
-      token: tokenCV,
+      token:         tokenCV,
     });
 
+    const [contractAddr, contractName] = SF_CONTRACT.split('.');
     const r = await fetch(
-      'https://api.mainnet.hiro.so/v2/contracts/call-read/' +
-      'SP3QFYVTMS0PRJT3K3GMDW9DGR33TDHENSDWVNQMR/sm-stackflow/get-pipe',
-      { method: 'POST',
+      `https://api.mainnet.hiro.so/v2/contracts/call-read/${contractAddr}/${contractName}/get-pipe`,
+      {
+        method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ sender: aliceAddr, arguments: [argHex] }) }
+        body: JSON.stringify({ sender: userAddr, arguments: [argHex] }),
+      }
     );
     if (!r.ok) return null;
     const data = await r.json();
-    if (!data.okay || !data.result || data.result === 'none') return null;
+    if (!data.okay || !data.result || data.result === '0x09') return null;
 
+    // Parse the response: extract balance-1, balance-2, nonce from the repr string
     const repr = data.result;
-    const b1 = repr.match(/balance-1 u(\d+)/)?.[1];
-    const b2 = repr.match(/balance-2 u(\d+)/)?.[1];
-    const nc = repr.match(/nonce u(\d+)/)?.[1];
-    if (!b1) return null;
-    return { balance1: BigInt(b1), balance2: BigInt(b2 ?? '0'), nonce: BigInt(nc ?? '0') };
+    const b1m  = repr.match(/balance-1 u(\d+)/);
+    const b2m  = repr.match(/balance-2 u(\d+)/);
+    const ncm  = repr.match(/nonce u(\d+)/);
+    if (!b1m) return null;
+
+    const balance1 = BigInt(b1m[1]);
+    const balance2 = BigInt(b2m?.[1] ?? '0');
+    const nonce    = BigInt(ncm?.[1] ?? '0');
+
+    // Determine which balance belongs to the user vs reservoir
+    const userIsP1 = pipeKey['principal-1'] === userAddr;
+    return {
+      userBalance:      userIsP1 ? balance1 : balance2,
+      reservoirBalance: userIsP1 ? balance2 : balance1,
+      nonce,
+      pipeKey,
+    };
   } catch { return null; }
 }
 
-// Minimal Clarity hex encoders for the pipe-key arg
+// Minimal hex encoders for pipe-key contract args
 function cvPrincipalHex(addr) {
   const di = addr.indexOf('.');
   if (di < 0) {
     const { version, hash160 } = parseStxAddress(addr);
-    return concat([new Uint8Array([0x05, version]), hash160]).reduce((s,b) => s + b.toString(16).padStart(2,'0'),'');
+    return bytesToHex(concat([new Uint8Array([0x05, version]), hash160]));
   }
   const { version, hash160 } = parseStxAddress(addr.slice(0, di));
   const name = new TextEncoder().encode(addr.slice(di + 1));
-  return concat([new Uint8Array([0x06, version]), hash160, new Uint8Array([name.length]), name])
-    .reduce((s,b) => s + b.toString(16).padStart(2,'0'),'');
+  return bytesToHex(concat([new Uint8Array([0x06, version]), hash160, new Uint8Array([name.length]), name]));
 }
+
 function cvTupleHex(fields) {
   const sorted = Object.keys(fields).sort();
-  const u32h = n => n.toString(16).padStart(8,'0');
-  const u8h  = n => n.toString(16).padStart(2,'0');
+  const u32h   = n => n.toString(16).padStart(8, '0');
+  const u8h    = n => n.toString(16).padStart(2, '0');
   let h = '0c' + u32h(sorted.length);
   for (const name of sorted) {
     const nb = new TextEncoder().encode(name);
-    h += u8h(nb.length) + Array.from(nb).map(b=>b.toString(16).padStart(2,'0')).join('') + fields[name];
+    h += u8h(nb.length) + Array.from(nb).map(b => b.toString(16).padStart(2, '0')).join('') + fields[name];
   }
   return h;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// API helpers
+// Open mailbox — calls sm-reservoir::create-tap-with-borrowed-liquidity
 // ─────────────────────────────────────────────────────────────────────────────
 
-const API_BASE = window.location.origin;
-
-async function apiFetch(path, opts = {}) {
-  const r = await fetch(API_BASE + path, opts);
-  return r;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Status tab
-// ─────────────────────────────────────────────────────────────────────────────
-
-async function loadStatus() {
-  const dot   = document.getElementById('health-dot');
-  const label = document.getElementById('health-label');
+async function openMailbox() {
+  const btn     = document.getElementById('open-mailbox-btn');
+  const errorEl = document.getElementById('open-mailbox-error');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Opening…';
+  errorEl.innerHTML = '';
 
   try {
-    const r    = await apiFetch('/status');
-    const data = await r.json();
+    // Args: (stackflow-contract principal, token (optional principal))
+    // token = none → STX channel; use (some <token-principal>) for SIP-010 tokens
+    const sfContractArg = '0x' + bytesToHex(serializeClarityValue({ type: 'principal', value: SF_CONTRACT }));
+    const tokenArg      = '0x' + bytesToHex(serializeClarityValue({ type: 'none' }));
 
-    serverStatus = data;  // cache for wallet auth
+    const [reservoirAddr, reservoirName] = RESERVOIR.split('.');
 
-    if (data.ok) {
-      dot.className = 'dot green';
-      label.textContent = 'Stackmail Server — Online';
-    } else {
-      dot.className = 'dot red';
-      label.textContent = 'Server returned error';
-    }
+    const resp = await walletProvider.request('stx_callContract', {
+      contractAddress: reservoirAddr,
+      contractName:    reservoirName,
+      functionName:    'create-tap-with-borrowed-liquidity',
+      functionArgs:    [sfContractArg, tokenArg],
+      network:         serverStatus.network ?? 'mainnet',
+      postConditions:  [],
+      postConditionMode: 'allow',
+    });
 
-    document.getElementById('s-addr').textContent     = data.serverAddress || '—';
-    document.getElementById('s-contract').textContent = data.sfContract    || '—';
-    document.getElementById('s-price').textContent    = data.messagePriceSats
-      ? `${data.messagePriceSats} sats` : '—';
-    document.getElementById('s-network').textContent  = data.network
-      ? data.network.charAt(0).toUpperCase() + data.network.slice(1) : '—';
-  } catch {
-    dot.className = 'dot red';
-    label.textContent = 'Cannot reach server';
+    const txId = resp?.result?.txid ?? resp?.result?.tx_id ?? resp?.txid ?? resp?.tx_id;
+    if (!txId) throw new Error('No transaction ID returned from wallet');
+
+    // Show pending state
+    document.getElementById('tx-explorer-link').href        = `https://explorer.hiro.so/txid/${txId}?chain=mainnet`;
+    document.getElementById('tx-explorer-link').textContent = txId.slice(0, 12) + '…' + txId.slice(-8);
+    document.getElementById('tx-status-msg').innerHTML = '';
+    setAppState('tx-pending');
+
+  } catch (e) {
+    errorEl.innerHTML = `<div class="alert alert-error">${escHtml(e.message)}</div>`;
+    btn.disabled = false;
+    btn.innerHTML = 'Open Mailbox';
   }
 }
 
-function updateIdentityUI() {
-  const addr = activeAddress();
-  const pub  = activePubkey();
+async function checkTapAfterTx() {
+  const btn      = document.getElementById('check-tap-btn');
+  const statusEl = document.getElementById('tx-status-msg');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Checking…';
 
-  // Status tab — identity card
-  if (isWalletMode()) {
-    document.getElementById('identity-mode-label').textContent   = 'Wallet Connected';
-    document.getElementById('identity-mode-badge').className     = 'badge badge-green';
-    document.getElementById('identity-mode-badge').textContent   = '● Connected';
+  const tap = await queryOnChainTap(walletAddress);
+  if (tap) {
+    pipeState = { myBalance: tap.userBalance, serverBalance: tap.reservoirBalance, nonce: tap.nonce };
+    updateIdentityUI();
+    setAppState('ready');
+    showTab('inbox');
+    loadInbox();
+    loadStatus();
   } else {
-    document.getElementById('identity-mode-label').textContent   = 'Session Key (ephemeral)';
-    document.getElementById('identity-mode-badge').className     = 'badge badge-yellow';
-    document.getElementById('identity-mode-badge').textContent   = '○ No wallet';
+    btn.disabled = false;
+    btn.textContent = 'Check Again';
+    statusEl.innerHTML = '<div class="alert alert-warning">Channel not found yet — the transaction may still be confirming. Try again in a moment.</div>';
   }
-  document.getElementById('session-addr').textContent   = addr;
-  document.getElementById('session-pubkey').textContent = pub;
-  document.getElementById('inbox-addr').textContent     = addr;
 }
 
-function updateWalletHeaderUI() {
-  const connectBtn = document.getElementById('connect-wallet-btn');
-  const chip       = document.getElementById('wallet-chip');
-  if (isWalletMode()) {
-    connectBtn.style.display = 'none';
-    chip.style.display = 'flex';
-    document.getElementById('wallet-addr-chip').textContent =
-      walletAddress.slice(0, 8) + '…' + walletAddress.slice(-4);
-  } else {
-    connectBtn.style.display = '';
-    chip.style.display = 'none';
+// ─────────────────────────────────────────────────────────────────────────────
+// Onboarding: pending message summary
+// ─────────────────────────────────────────────────────────────────────────────
+
+function updateOnboardingPendingSummary(messages) {
+  const el = document.getElementById('pending-summary');
+  if (messages.length === 0) {
+    el.innerHTML = `<div class="alert alert-info">No messages yet. Open your mailbox so others can send you messages.</div>`;
+    return;
   }
-  updateIdentityUI();
+  const totalSats = messages.reduce((s, m) => s + BigInt(m.amount || '0'), 0n);
+  el.innerHTML = `
+    <div class="alert alert-success">
+      <strong>${messages.length} message${messages.length !== 1 ? 's' : ''} waiting for you</strong> —
+      ${totalSats.toLocaleString()} sats ready to collect.
+      Open your mailbox to access them.
+    </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// API helper
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function apiFetch(path, opts = {}) {
+  return fetch(window.location.origin + path, opts);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Inbox tab
 // ─────────────────────────────────────────────────────────────────────────────
-
-// Store decrypted message bodies in memory so they survive re-renders
-const decryptedCache = new Map(); // msgId → { subject, body, secret }
 
 async function loadInbox() {
   const listEl   = document.getElementById('inbox-list');
@@ -1231,167 +1288,74 @@ async function loadInbox() {
   statusEl.innerHTML = '<span class="spinner"></span> Loading…';
   listEl.innerHTML   = '';
 
-  const auth = await buildActiveAuthHeader('get-inbox');
-
   try {
-    const r   = await apiFetch(`/inbox?limit=50${claimed ? '&claimed=true' : ''}`, {
+    const auth = await buildWalletAuthHeader('get-inbox');
+    const r    = await apiFetch(`/inbox?limit=50${claimed ? '&claimed=true' : ''}`, {
       headers: { 'x-stackmail-auth': auth },
     });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
-      statusEl.innerHTML = `<div class="alert alert-error">Error: ${err.message || r.status}</div>`;
+      statusEl.innerHTML = `<div class="alert alert-error">Error: ${escHtml(err.message || String(r.status))}</div>`;
       return;
     }
-
     const data = await r.json();
     statusEl.innerHTML = '';
-    renderInbox(data.messages || []);
+    renderInboxMessages(data.messages || []);
   } catch (e) {
-    statusEl.innerHTML = `<div class="alert alert-error">Failed to load inbox: ${e.message}</div>`;
+    statusEl.innerHTML = `<div class="alert alert-error">Failed to load inbox: ${escHtml(e.message)}</div>`;
   }
 }
 
-function renderInbox(messages) {
-  const listEl = document.getElementById('inbox-list');
-  const addr   = activeAddress();
+function renderInboxMessages(messages) {
+  const listEl   = document.getElementById('inbox-list');
+  const countEl  = document.getElementById('inbox-count');
+  const unclaimed = messages.filter(m => !m.claimed);
+
+  countEl.textContent = messages.length
+    ? `${unclaimed.length} unclaimed · ${messages.length} total`
+    : '';
 
   if (!messages.length) {
     listEl.innerHTML = `
       <div class="empty-state">
         <div class="empty-state-icon">📭</div>
         <h3>No messages yet</h3>
-        <p>Share your address so people can send you messages:</p>
-        <div class="mono" style="margin-top:8px;font-size:12px;color:var(--accent)">${addr}</div>
+        <p>Share your address so others can send you messages:</p>
+        <div class="mono" style="margin-top:8px;font-size:12px;color:var(--accent)">${escHtml(walletAddress)}</div>
       </div>`;
     return;
   }
 
   listEl.innerHTML = '';
-
   for (const msg of messages) {
-    const cached   = decryptedCache.get(msg.id);
-    const itemEl   = document.createElement('div');
-    itemEl.className = 'msg-item';
-    itemEl.dataset.msgId = msg.id;
+    const el = document.createElement('div');
+    el.className = 'msg-item';
 
-    const time = new Date(msg.sentAt).toLocaleString();
+    const time    = new Date(msg.sentAt).toLocaleString();
+    const fromShort = msg.from
+      ? msg.from.slice(0, 8) + '…' + msg.from.slice(-6)
+      : '—';
+    const badge   = msg.claimed
+      ? '<span class="badge badge-green">✓ Claimed</span>'
+      : '<span class="badge badge-purple">Pending</span>';
 
-    if (msg.claimed && cached) {
-      // Show decrypted claimed message
-      itemEl.innerHTML = `
-        <div class="msg-header">
-          <div>
-            <div class="msg-from">From: ${msg.from}</div>
-            <div class="msg-subject">${escHtml(cached.subject || '(no subject)')}</div>
-          </div>
-          <div class="msg-meta">
-            <span class="badge badge-green">✓ Claimed</span>
-            <span class="msg-amount">${msg.amount} sats</span>
-          </div>
+    el.innerHTML = `
+      <div class="msg-header">
+        <div>
+          <div class="msg-from">From: ${escHtml(msg.from || '—')}</div>
+          <div style="margin-top:4px;font-size:12px;color:var(--muted)">${time}</div>
         </div>
-        <div class="msg-body">${escHtml(cached.body)}</div>
-        <div style="margin-top:8px;font-size:11px;color:var(--muted)">${time}</div>`;
-    } else if (msg.claimed) {
-      // Claimed but not in cache — show summary
-      itemEl.innerHTML = `
-        <div class="msg-header">
-          <div>
-            <div class="msg-from">From: ${msg.from}</div>
-          </div>
-          <div class="msg-meta">
-            <span class="badge badge-green">✓ Claimed</span>
-            <span class="msg-amount">${msg.amount} sats</span>
-          </div>
+        <div class="msg-meta">
+          ${badge}
+          <span class="msg-amount">${Number(msg.amount || 0).toLocaleString()} sats</span>
         </div>
-        <div style="font-size:12px;color:var(--muted)">${time}</div>`;
-    } else {
-      // Unclaimed — show claim button
-      itemEl.innerHTML = `
-        <div class="msg-header">
-          <div>
-            <div class="msg-from">From: ${msg.from}</div>
-          </div>
-          <div class="msg-meta">
-            <span class="badge badge-purple">Unclaimed</span>
-            <span class="msg-amount">${msg.amount} sats</span>
-          </div>
-        </div>
-        <div style="margin-top:8px;font-size:11px;color:var(--muted)">${time}</div>
-        <div style="margin-top:10px">
-          <button class="btn btn-primary btn-sm claim-btn" data-msg-id="${msg.id}">Claim &amp; Decrypt</button>
-        </div>
-        <div class="claim-status" data-msg-id="${msg.id}"></div>`;
-    }
+      </div>
+      <div style="margin-top:10px;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">
+        <span>🔒</span>
+        <span>Message content is encrypted — wallet decryption (ECIES) coming soon</span>
+      </div>`;
 
-    listEl.appendChild(itemEl);
-  }
-
-  // Wire up claim buttons
-  listEl.querySelectorAll('.claim-btn').forEach(btn => {
-    btn.addEventListener('click', () => claimMessage(btn.dataset.msgId));
-  });
-}
-
-/**
- * Claim flow:
- *   1. GET /inbox/{msgId}/preview  → get encryptedPayload
- *   2. Decrypt to get { secret, subject, body }
- *   3. POST /inbox/{msgId}/claim   → reveal secret to server
- *   4. Re-render the message with decrypted content
- *
- * Note: in wallet mode, decryption uses the session key for now (wallet mode
- * does not yet have a private key for ECIES decryption — that would require
- * a separate key-agreement step). The session key is still used for decryption
- * even when wallet mode is active for authentication.
- */
-async function claimMessage(msgId) {
-  const btn      = document.querySelector(`.claim-btn[data-msg-id="${msgId}"]`);
-  const statusEl = document.querySelector(`.claim-status[data-msg-id="${msgId}"]`);
-
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Claiming…'; }
-
-  try {
-    const auth = await buildActiveAuthHeader('claim-message', msgId);
-
-    // Step 1: fetch the preview (contains encrypted payload)
-    const previewR = await apiFetch(`/inbox/${encodeURIComponent(msgId)}/preview`, {
-      headers: { 'x-stackmail-auth': auth },
-    });
-
-    if (!previewR.ok) {
-      const err = await previewR.json().catch(() => ({}));
-      throw new Error(err.message || `Preview failed: ${previewR.status}`);
-    }
-
-    const preview = await previewR.json();
-
-    // Step 2: decrypt the payload using session private key
-    const plain = await decryptMail(preview.encryptedPayload, sessionPrivKey);
-    // plain = { v:1, secret, subject?, body }
-
-    // Step 3: reveal the secret to claim the payment
-    const claimAuth = await buildActiveAuthHeader('claim-message', msgId);
-    const claimR = await apiFetch(`/inbox/${encodeURIComponent(msgId)}/claim`, {
-      method:  'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-stackmail-auth': claimAuth,
-      },
-      body: JSON.stringify({ secret: plain.secret }),
-    });
-
-    if (!claimR.ok) {
-      const err = await claimR.json().catch(() => ({}));
-      throw new Error(err.message || `Claim failed: ${claimR.status}`);
-    }
-
-    // Step 4: cache and re-render
-    decryptedCache.set(msgId, { subject: plain.subject, body: plain.body, secret: plain.secret });
-    await loadInbox();
-
-  } catch (e) {
-    if (btn) { btn.disabled = false; btn.textContent = 'Claim & Decrypt'; }
-    if (statusEl) statusEl.innerHTML = `<div class="alert alert-error" style="margin-top:8px">${escHtml(e.message)}</div>`;
+    listEl.appendChild(el);
   }
 }
 
@@ -1399,19 +1363,18 @@ async function claimMessage(msgId) {
 // Compose tab
 // ─────────────────────────────────────────────────────────────────────────────
 
-let recipientInfo = null; // cached payment-info for current `to` address
+let recipientInfo = null;
 
 async function fetchRecipientInfo(toAddr) {
   const el = document.getElementById('recipient-status');
-  el.textContent = 'Checking…';
-  el.style.color = 'var(--muted)';
+  el.innerHTML = '<span class="spinner"></span> Checking…';
 
   try {
     const r    = await apiFetch(`/payment-info/${encodeURIComponent(toAddr)}`);
     const data = await r.json();
 
     if (!r.ok) {
-      el.innerHTML = `<span style="color:var(--red)">✗ ${escHtml(data.message || data.error || 'Not found')}</span>`;
+      el.innerHTML = `<span style="color:var(--red)">✗ ${escHtml(data.message || data.error || 'Not registered')}</span>`;
       recipientInfo = null;
       document.getElementById('send-btn').disabled = true;
       document.getElementById('payment-panel').style.display = 'none';
@@ -1422,31 +1385,25 @@ async function fetchRecipientInfo(toAddr) {
     el.innerHTML  = `<span style="color:var(--green)">✓ Registered — can receive messages</span>`;
 
     // Update payment panel
-    document.getElementById('payment-panel').style.display = 'block';
-    document.getElementById('pay-price').textContent   = `${data.amount} sats`;
-    document.getElementById('pay-balance').textContent = `${pipeState.myBalance} sats`;
+    document.getElementById('payment-panel').style.display = '';
+    document.getElementById('pay-price').textContent   = `${Number(data.amount).toLocaleString()} sats`;
+    document.getElementById('pay-balance').textContent = `${pipeState.myBalance.toLocaleString()} sats`;
     document.getElementById('pay-nonce').textContent   = `${pipeState.nonce}`;
-    document.getElementById('send-btn').disabled = false;
 
-    // If wallet mode, query on-chain tap
-    if (isWalletMode()) {
-      const tap = await queryOnChainTap(walletAddress);
-      if (tap) {
-        pipeState = { myBalance: tap.balance1, serverBalance: tap.balance2, nonce: tap.nonce };
-        document.getElementById('tap-status').innerHTML =
-          `<span style="color:var(--green)">✓ On-chain tap found — ${tap.balance1.toLocaleString()} µTOKEN available</span>`;
-        // Update balance display with on-chain values
-        document.getElementById('pay-balance').textContent = `${pipeState.myBalance} sats`;
-        document.getElementById('pay-nonce').textContent   = `${pipeState.nonce}`;
-      } else {
-        document.getElementById('tap-status').innerHTML =
-          `<span style="color:var(--yellow)">⚠ No on-chain tap found for your address. ` +
-          `<a href="https://explorer.hiro.so/txid/new?contractId=SP3QFYVTMS0PRJT3K3GMDW9DGR33TDHENSDWVNQMR.sm-reservoir&functionName=create-tap" ` +
-          `target="_blank" style="color:var(--accent)">Create a tap</a> to use real on-chain payments.</span>`;
-      }
+    // Query on-chain tap to show live balance
+    const tap = await queryOnChainTap(walletAddress);
+    if (tap) {
+      pipeState = { myBalance: tap.userBalance, serverBalance: tap.reservoirBalance, nonce: tap.nonce };
+      document.getElementById('pay-balance').textContent = `${pipeState.myBalance.toLocaleString()} sats`;
+      document.getElementById('pay-nonce').textContent   = `${pipeState.nonce}`;
+      document.getElementById('tap-status').innerHTML =
+        `<span style="color:var(--green)">✓ Channel open — ${pipeState.myBalance.toLocaleString()} sats available</span>`;
     } else {
-      document.getElementById('tap-status').innerHTML = '';
+      document.getElementById('tap-status').innerHTML =
+        `<span style="color:var(--red)">✗ No channel found on-chain</span>`;
     }
+
+    document.getElementById('send-btn').disabled = false;
 
   } catch (e) {
     el.innerHTML = `<span style="color:var(--red)">✗ ${escHtml(e.message)}</span>`;
@@ -1457,20 +1414,16 @@ async function fetchRecipientInfo(toAddr) {
 }
 
 /**
- * Send flow:
- *   1. GET /payment-info/{toAddr}      → recipientPublicKey, amount
- *   2. Generate 32-byte random secret
- *   3. hashedSecret = hex(sha256(secretBytes))
- *   4. Encrypt { v:1, secret, subject, body } to recipient's pubkey (ECIES)
- *   5. Build canonical pipeKey (sender ↔ server)
- *   6. Build SIP-018 transfer message with updated balances + HTLC
- *   7. Sign with session key or wallet
- *   8. POST /messages/{toAddr} with payment proof header
+ * Send a message:
+ *  1. Generate random secret + hash for HTLC
+ *  2. Encrypt payload to recipient's pubkey (ECIES)
+ *  3. Build SIP-018 transfer message + sign with wallet
+ *  4. POST to /messages/{toAddr} with payment proof header
  */
 async function sendMessage() {
-  const toAddr  = document.getElementById('to-input').value.trim();
-  const subject = document.getElementById('subject-input').value.trim();
-  const body    = document.getElementById('body-input').value.trim();
+  const toAddr   = document.getElementById('to-input').value.trim();
+  const subject  = document.getElementById('subject-input').value.trim();
+  const body     = document.getElementById('body-input').value.trim();
   const statusEl = document.getElementById('send-status');
   const sendBtn  = document.getElementById('send-btn');
 
@@ -1478,8 +1431,6 @@ async function sendMessage() {
     statusEl.innerHTML = '<div class="alert alert-warning">Please fill in To and Message fields.</div>';
     return;
   }
-
-  // Use cached info or re-fetch
   if (!recipientInfo) {
     statusEl.innerHTML = '<div class="alert alert-warning">Please wait for recipient info to load.</div>';
     return;
@@ -1490,105 +1441,84 @@ async function sendMessage() {
   statusEl.innerHTML = '';
 
   try {
+    const chainId    = serverStatus.chainId ?? CHAIN_ID;
     const serverAddr = recipientInfo.serverAddress;
-    const senderAddr = activeAddress();
+    const senderAddr = walletAddress;
 
-    // Step 1: Generate random secret and hash it for HTLC
-    const secretBytes = crypto.getRandomValues(new Uint8Array(32));
-    const secretHex   = bytesToHex(secretBytes);
-    // hashSecret: sha256 of the raw bytes, no 0x prefix
-    const hashedSecretBytes = sha256(secretBytes);
-    const hashedSecretHex   = bytesToHex(hashedSecretBytes);
+    // Random secret + hash
+    const secretBytes       = crypto.getRandomValues(new Uint8Array(32));
+    const secretHex         = bytesToHex(secretBytes);
+    const hashedSecretHex   = bytesToHex(sha256(secretBytes));
 
-    // Step 2: Encrypt mail payload for recipient
+    // Encrypt payload
     const encryptedPayload = await encryptMail(
       { v: 1, secret: secretHex, subject: subject || undefined, body },
       recipientInfo.recipientPublicKey,
     );
 
-    // Step 3: Update local pipe state (optimistic — no round-trip needed)
-    const price = BigInt(recipientInfo.amount || MSG_PRICE);
+    // Update pipe state
+    const price            = BigInt(recipientInfo.amount || '1000');
     const newServerBalance = pipeState.serverBalance + price;
     const newMyBalance     = pipeState.myBalance - price;
     const newNonce         = pipeState.nonce + 1n;
 
-    // Step 4: Build canonical pipe key (sender ↔ server)
-    // Token is null for the default channel (STX native)
+    // Build canonical pipe key (sender ↔ server, no token = STX)
     const pipeKey = canonicalPipeKey(null, senderAddr, serverAddr);
 
-    // Step 5: Build the SIP-018 transfer message
-    // We sign from the server's perspective (forPrincipal = server,
-    // which means the server's balance is myBalance in this state).
+    // Build SIP-018 transfer message
     const message = buildTransferMessage({
       pipeKey,
-      forPrincipal: serverAddr,       // recipient of this state update
-      myBalance:    newServerBalance,  // server's new balance
-      theirBalance: newMyBalance,      // sender's new balance
+      forPrincipal: serverAddr,
+      myBalance:    newServerBalance,
+      theirBalance: newMyBalance,
       nonce:        newNonce,
-      action:       1n,               // ACTION_TRANSFER
-      actor:        senderAddr,       // sender is the actor
-      hashedSecret: hashedSecretHex,  // HTLC commitment
+      action:       1n,
+      actor:        senderAddr,
+      hashedSecret: hashedSecretHex,
       validAfter:   null,
     });
 
-    // Step 6: Sign with wallet if in wallet mode, else use session key
-    let sig;
-    if (isWalletMode()) {
-      sig = await sip018SignWithWallet(SF_CONTRACT, message.fields, CHAIN_ID);
-    } else {
-      sig = sip018Sign(SF_CONTRACT, message, sessionPrivKey, CHAIN_ID);
-    }
+    // Sign with wallet
+    const sig = await sip018SignWithWallet(SF_CONTRACT, message.fields, chainId);
 
-    // Step 7: Build proof object (matches reservoir.ts verifyIncomingPayment)
+    // Build proof object
     const proof = {
-      contractId:      SF_CONTRACT,
+      contractId:    SF_CONTRACT,
       pipeKey,
-      forPrincipal:    serverAddr,
-      withPrincipal:   senderAddr,
-      myBalance:       newServerBalance.toString(),
-      theirBalance:    newMyBalance.toString(),
-      nonce:           newNonce.toString(),
-      action:          '1',
-      actor:           senderAddr,
-      hashedSecret:    hashedSecretHex,
-      theirSignature:  sig,
+      forPrincipal:  serverAddr,
+      withPrincipal: senderAddr,
+      myBalance:     newServerBalance.toString(),
+      theirBalance:  newMyBalance.toString(),
+      nonce:         newNonce.toString(),
+      action:        '1',
+      actor:         senderAddr,
+      hashedSecret:  hashedSecretHex,
+      theirSignature: sig,
     };
 
-    const paymentHeader = btoa(JSON.stringify(proof));
-
-    // Step 8: POST the message
     const r = await apiFetch(`/messages/${encodeURIComponent(toAddr)}`, {
       method:  'POST',
       headers: {
-        'content-type':          'application/json',
-        'x-stackmail-payment':   paymentHeader,
+        'content-type':        'application/json',
+        'x-stackmail-payment': btoa(JSON.stringify(proof)),
       },
-      body: JSON.stringify({
-        from:             senderAddr,
-        encryptedPayload,
-      }),
+      body: JSON.stringify({ from: senderAddr, encryptedPayload }),
     });
 
     const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.message || data.error || `Send failed: ${r.status}`);
 
-    if (!r.ok) {
-      throw new Error(data.message || data.error || `Send failed: ${r.status}`);
-    }
-
-    // Commit state update locally
+    // Commit state
     pipeState = { myBalance: newMyBalance, serverBalance: newServerBalance, nonce: newNonce };
-
-    // Update payment panel display
-    document.getElementById('pay-balance').textContent = `${pipeState.myBalance} sats`;
+    document.getElementById('pay-balance').textContent = `${pipeState.myBalance.toLocaleString()} sats`;
     document.getElementById('pay-nonce').textContent   = `${pipeState.nonce}`;
 
     statusEl.innerHTML = `
       <div class="alert alert-success">
-        ✓ Message sent!<br/>
-        <span class="mono" style="font-size:11px">Message ID: ${escHtml(data.messageId || '—')}</span>
+        ✓ Message sent!<br>
+        <span class="mono" style="font-size:11px">ID: ${escHtml(data.messageId || '—')}</span>
       </div>`;
 
-    // Clear form
     document.getElementById('body-input').value    = '';
     document.getElementById('subject-input').value = '';
 
@@ -1601,29 +1531,58 @@ async function sendMessage() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Utility
+// Status tab
 // ─────────────────────────────────────────────────────────────────────────────
 
-function escHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+async function loadStatus() {
+  const dot   = document.getElementById('health-dot');
+  const label = document.getElementById('health-label');
+  try {
+    const r    = await apiFetch('/status');
+    const data = await r.json();
+    serverStatus = data;
+    dot.className    = data.ok ? 'dot green' : 'dot red';
+    label.textContent = data.ok ? 'Stackmail Server — Online' : 'Server returned error';
+    document.getElementById('s-addr').textContent     = data.serverAddress || '—';
+    document.getElementById('s-contract').textContent = data.sfContract    || '—';
+    document.getElementById('s-price').textContent    = data.messagePriceSats
+      ? `${Number(data.messagePriceSats).toLocaleString()} sats` : '—';
+    document.getElementById('s-network').textContent  = data.network
+      ? data.network.charAt(0).toUpperCase() + data.network.slice(1) : '—';
+  } catch {
+    dot.className    = 'dot red';
+    label.textContent = 'Cannot reach server';
+  }
 }
 
-function copyToClipboard(text) {
-  navigator.clipboard.writeText(text).catch(() => {
-    // Fallback for older browsers
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.opacity  = '0';
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-  });
+function updateIdentityUI() {
+  const addr = walletAddress || '—';
+  const pub  = walletPubkey  || '—';
+  const el   = document.getElementById('status-wallet-addr');
+  const pk   = document.getElementById('status-wallet-pubkey');
+  const ia   = document.getElementById('inbox-addr');
+  if (el) el.textContent = addr;
+  if (pk) pk.textContent = pub;
+  if (ia) ia.textContent = addr;
+
+  // Tap info
+  const tapEl = document.getElementById('status-tap-info');
+  if (!tapEl) return;
+  if (pipeState.nonce > 0n || pipeState.myBalance > 0n) {
+    tapEl.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
+        <div>
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:2px">Your balance</div>
+          <div style="font-size:15px;color:var(--text)">${pipeState.myBalance.toLocaleString()} <span style="font-size:11px">sats</span></div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:2px">Nonce</div>
+          <div style="font-size:15px;color:var(--text)">${pipeState.nonce}</div>
+        </div>
+      </div>`;
+  } else {
+    tapEl.textContent = 'No channel state loaded.';
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1632,60 +1591,69 @@ function copyToClipboard(text) {
 
 function showTab(name) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${name}`));
-  if (name === 'inbox') loadInbox();
+  document.querySelectorAll('#panel-main .tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${name}`));
+  if (name === 'status') loadStatus();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Wire up event listeners
+// Utility
 // ─────────────────────────────────────────────────────────────────────────────
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Event wiring
+// ─────────────────────────────────────────────────────────────────────────────
+
+document.getElementById('connect-wallet-btn').addEventListener('click', connectWallet);
+document.getElementById('connect-wallet-main').addEventListener('click', connectWallet);
+document.getElementById('disconnect-btn').addEventListener('click', disconnectWallet);
+document.getElementById('open-mailbox-btn').addEventListener('click', openMailbox);
+document.getElementById('check-tap-btn').addEventListener('click', checkTapAfterTx);
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => showTab(btn.dataset.tab));
 });
 
-document.getElementById('regen-key-btn').addEventListener('click', () => {
-  if (!confirm('Regenerate session key? You will lose access to your current inbox address.')) return;
-  sessionPrivKey     = regenerateKey();
-  sessionPubKeyBytes = secp256k1.getPublicKey(sessionPrivKey, true);
-  sessionPubKeyHex   = bytesToHex(sessionPubKeyBytes);
-  sessionAddress     = pubkeyToStxAddress(sessionPubKeyBytes);
-  pipeState          = { myBalance: 50_000_000n, serverBalance: 0n, nonce: 0n };
-  updateIdentityUI();
-});
-
-document.getElementById('copy-session-addr-btn').addEventListener('click', () => {
-  copyToClipboard(activeAddress());
-  const btn = document.getElementById('copy-session-addr-btn');
-  btn.textContent = 'Copied!';
-  setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
-});
+document.getElementById('refresh-inbox-btn').addEventListener('click', loadInbox);
+document.getElementById('show-claimed-cb').addEventListener('change', loadInbox);
+document.getElementById('send-btn').addEventListener('click', sendMessage);
 
 document.getElementById('copy-inbox-addr-btn').addEventListener('click', () => {
-  copyToClipboard(activeAddress());
+  copyToClipboard(walletAddress || '');
   const btn = document.getElementById('copy-inbox-addr-btn');
   btn.textContent = 'Copied!';
   setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
 });
 
-document.getElementById('refresh-inbox-btn').addEventListener('click', loadInbox);
+document.getElementById('copy-status-addr-btn').addEventListener('click', () => {
+  copyToClipboard(walletAddress || '');
+  const btn = document.getElementById('copy-status-addr-btn');
+  btn.textContent = 'Copied!';
+  setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+});
 
-document.getElementById('show-claimed-cb').addEventListener('change', loadInbox);
-
-document.getElementById('send-btn').addEventListener('click', sendMessage);
-
-document.getElementById('connect-wallet-btn').addEventListener('click', connectWallet);
-document.getElementById('connect-wallet-btn-status').addEventListener('click', connectWallet);
-
-// Auto-fetch recipient info when a valid address is entered
+// Auto-fetch recipient info when a valid address is typed
 let toDebounceTimer = null;
-document.getElementById('to-input').addEventListener('input', (e) => {
+document.getElementById('to-input').addEventListener('input', e => {
   const val = e.target.value.trim();
   recipientInfo = null;
   document.getElementById('send-btn').disabled = true;
   document.getElementById('payment-panel').style.display = 'none';
   document.getElementById('recipient-status').textContent = '';
-
   clearTimeout(toDebounceTimer);
   if (val.startsWith('S') && val.length >= 30) {
     toDebounceTimer = setTimeout(() => fetchRecipientInfo(val), 500);
@@ -1693,11 +1661,10 @@ document.getElementById('to-input').addEventListener('input', (e) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Bootstrap
+// Bootstrap — start at no-wallet state
 // ─────────────────────────────────────────────────────────────────────────────
 
-updateIdentityUI();
-loadStatus();
+setAppState('no-wallet');
 
 </script>
 </body>
