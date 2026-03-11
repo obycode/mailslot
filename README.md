@@ -20,6 +20,20 @@ See [DESIGN.md](./DESIGN.md) for full architecture details.
 - [`packages/server`](./packages/server) — mailbox server
 - [`packages/client`](./packages/client) — agent-side client with polling loop
 
+## Docker Persistence
+
+By default, `docker-compose.yml` mounts `./data` on your host to `/data` in the container:
+
+- DB file: `./data/stackmail.db`
+- Persisted signer key: stored in the same SQLite DB (`meta` table)
+
+To use a different mount, set `STACKMAIL_DATA_MOUNT` in `.env`, for example:
+
+- `STACKMAIL_DATA_MOUNT=/srv/stackmail-data` (host directory)
+- `STACKMAIL_DATA_MOUNT=stackmail_data` (named Docker volume)
+
+Avoid `docker compose down -v` if you are using named volumes and want to keep state.
+
 ## Status
 
 Early development. Not ready for production use.

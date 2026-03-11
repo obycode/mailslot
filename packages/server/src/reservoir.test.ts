@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { secp256k1 } from '@noble/curves/secp256k1';
+import { principalCV, serializeCVBytes } from '@stacks/transactions';
 import { ReservoirService } from './reservoir.js';
-import { buildTransferMessage, parseStxAddress, sip018Sign, type TransferState } from './sip018.js';
+import { buildTransferMessage, sip018Sign, type TransferState } from './sip018.js';
 import { pubkeyToStxAddress } from './auth.js';
 
 function privKeyHex(): string {
@@ -14,16 +15,7 @@ function stxAddressFromPrivkey(privateKeyHex: string): string {
 }
 
 function serializePrincipalForSort(principal: string): Buffer {
-  const dot = principal.indexOf('.');
-  if (dot < 0) {
-    const { version, hash160 } = parseStxAddress(principal);
-    return Buffer.concat([Buffer.from([0x05, version]), hash160]);
-  }
-  const standard = principal.slice(0, dot);
-  const name = principal.slice(dot + 1);
-  const { version, hash160 } = parseStxAddress(standard);
-  const nameBytes = Buffer.from(name, 'ascii');
-  return Buffer.concat([Buffer.from([0x06, version]), hash160, Buffer.from([nameBytes.length]), nameBytes]);
+  return Buffer.from(serializeCVBytes(principalCV(principal)));
 }
 
 function canonicalPipePrincipals(a: string, b: string): { 'principal-1': string; 'principal-2': string } {

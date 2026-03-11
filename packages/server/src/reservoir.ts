@@ -9,7 +9,9 @@
  */
 
 import type { PendingPayment } from './types.js';
-import { buildTransferMessage, parseStxAddress, sip018Sign, sip018Verify, type TransferState } from './sip018.js';
+import { cvToValue, hexToCV, principalCV, serializeCVBytes, uintCV } from '@stacks/transactions';
+import type { ClarityValue } from '@stacks/transactions';
+import { buildTransferMessage, sip018Sign, sip018Verify, type TransferState } from './sip018.js';
 
 export interface VerifiedPayment {
   hashedSecret: string;
@@ -46,16 +48,7 @@ interface PipeRow {
 }
 
 function serializePrincipalForSort(principal: string): Buffer {
-  const dot = principal.indexOf('.');
-  if (dot < 0) {
-    const { version, hash160 } = parseStxAddress(principal);
-    return Buffer.concat([Buffer.from([0x05, version]), hash160]);
-  }
-  const standard = principal.slice(0, dot);
-  const name = principal.slice(dot + 1);
-  const { version, hash160 } = parseStxAddress(standard);
-  const nameBytes = Buffer.from(name, 'ascii');
-  return Buffer.concat([Buffer.from([0x06, version]), hash160, Buffer.from([nameBytes.length]), nameBytes]);
+  return Buffer.from(serializeCVBytes(principalCV(principal)));
 }
 
 function canonicalPipePrincipals(a: string, b: string): { 'principal-1': string; 'principal-2': string } {
@@ -76,6 +69,51 @@ function normalizeHex32(value: string): string {
   return normalized;
 }
 
+function isContractPrincipal(value: string): boolean {
+  return /^S[PT][0-9A-Z]{39}\.[a-zA-Z][a-zA-Z0-9-]{0,39}$/.test(value);
+}
+
+function chainIdToHiroApi(chainId: number): string {
+  return chainId === 1 ? 'https://api.mainnet.hiro.so' : 'https://api.testnet.hiro.so';
+}
+
+function parseUintFromReadOnlyResult(result: string): bigint {
+  try {
+    if (result.startsWith('0x')) {
+      const cv = hexToCV(result);
+      const direct = extractUintFromCv(cv);
+      if (direct != null) return direct;
+
+      const value = cvToValue(cv) as unknown;
+      if (typeof value === 'bigint' || typeof value === 'number' || typeof value === 'string') {
+        return BigInt(value);
+      }
+      if (
+        typeof value === 'object' &&
+        value != null &&
+        (value as { type?: unknown }).type === 'uint' &&
+        (typeof (value as { value?: unknown }).value === 'bigint' ||
+          typeof (value as { value?: unknown }).value === 'number' ||
+          typeof (value as { value?: unknown }).value === 'string')
+      ) {
+        return BigInt((value as { value: bigint | number | string }).value);
+      }
+    }
+  } catch {
+    // Fall through to repr parsing.
+  }
+
+  const reprMatch = result.match(/u(\d+)/);
+  if (reprMatch) return BigInt(reprMatch[1]);
+  throw new ReservoirError(502, 'unexpected get-borrow-fee response format', 'borrow-fee-read-failed');
+}
+
+function extractUintFromCv(cv: ClarityValue): bigint | null {
+  if (cv.type === 'uint') return BigInt((cv as { value: bigint | number | string }).value);
+  if (cv.type === 'ok') return extractUintFromCv((cv as { value: ClarityValue }).value);
+  return null;
+}
+
 interface PipeUpdateMeta {
   action?: string | null;
   actor?: string | null;
@@ -88,6 +126,8 @@ interface PipeUpdateMeta {
 export class ReservoirService {
   private db: DB | null = null;
   private readonly serverAddress: string;
+  private readonly signerAddress: string;
+  private readonly reservoirContractId: string;
   private readonly serverPrivateKey: string;
   private readonly contractId: string;
   private readonly chainId: number;
@@ -97,6 +137,8 @@ export class ReservoirService {
   constructor(config: {
     db: DB;
     serverAddress: string;
+    signerAddress?: string;
+    reservoirContractId?: string;
     serverPrivateKey: string;
     contractId: string;
     chainId: number;
@@ -105,6 +147,8 @@ export class ReservoirService {
   }) {
     this.db = config.db;
     this.serverAddress = config.serverAddress;
+    this.signerAddress = (config.signerAddress ?? config.serverAddress).trim();
+    this.reservoirContractId = (config.reservoirContractId ?? '').trim();
     this.serverPrivateKey = config.serverPrivateKey;
     this.contractId = config.contractId;
     this.chainId = config.chainId;
@@ -153,6 +197,44 @@ export class ReservoirService {
     return this.db;
   }
 
+  private async fetchBorrowFeeFromReservoir(amount: bigint): Promise<bigint> {
+    const [contractAddr, contractName] = this.reservoirContractId.split('.');
+    if (!contractAddr || !contractName) {
+      throw new ReservoirError(503, 'reservoir contract not configured', 'reservoir-contract-missing');
+    }
+
+    const argHex = '0x' + Buffer.from(serializeCVBytes(uintCV(amount))).toString('hex');
+    const endpoint = `${chainIdToHiroApi(this.chainId)}/v2/contracts/call-read/${contractAddr}/${contractName}/get-borrow-fee`;
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          sender: this.serverAddress,
+          arguments: [argHex],
+        }),
+      });
+    } catch {
+      throw new ReservoirError(503, 'failed to reach stacks read-only API for borrow fee', 'borrow-fee-read-failed');
+    }
+
+    if (!response.ok) {
+      throw new ReservoirError(
+        503,
+        `failed to read borrow fee from reservoir (${response.status})`,
+        'borrow-fee-read-failed',
+      );
+    }
+
+    const payload = await response.json() as { okay?: boolean; result?: string };
+    if (!payload.okay || typeof payload.result !== 'string') {
+      throw new ReservoirError(503, 'reservoir get-borrow-fee read-only call failed', 'borrow-fee-read-failed');
+    }
+
+    return parseUintFromReadOnlyResult(payload.result);
+  }
+
   /** Build canonical pipe ID matching StackFlow: "contractId|token|principal-1|principal-2" */
   private buildPipeId(
     contractId: string,
@@ -166,6 +248,20 @@ export class ReservoirService {
     return this.assertDb()
       .prepare('SELECT * FROM reservoir_pipes WHERE pipe_id = ?')
       .get(pipeId) as PipeRow | null;
+  }
+
+  private getLatestPipeRowForPrincipals(contractId: string, principal1: string, principal2: string): PipeRow | null {
+    const suffix = `|${principal1}|${principal2}`;
+    return this.assertDb()
+      .prepare(`
+        SELECT *
+        FROM reservoir_pipes
+        WHERE contract_id = ?
+          AND pipe_id LIKE ?
+        ORDER BY updated_at DESC
+        LIMIT 1
+      `)
+      .get(contractId, `%${suffix}`) as PipeRow | null;
   }
 
   private upsertPipe(
@@ -449,14 +545,13 @@ export class ReservoirService {
     const outgoingAmount = BigInt(args.incomingAmount) - this.minFeeSats;
     if (outgoingAmount <= 0n) return null;
 
-    // Find the exact canonical STX pipe for server↔recipient.
+    // Find the latest canonical pipe for server↔recipient, regardless of token.
     const principals = canonicalPipePrincipals(this.serverAddress, args.recipientAddr);
-    const pipeKey = {
-      'principal-1': principals['principal-1'],
-      'principal-2': principals['principal-2'],
-      token: null as string | null,
-    };
-    const matchingPipe = this.getPipeRow(this.buildPipeId(args.contractId, pipeKey));
+    const matchingPipe = this.getLatestPipeRowForPrincipals(
+      args.contractId,
+      principals['principal-1'],
+      principals['principal-2'],
+    );
 
     if (!matchingPipe) {
       // No channel open with recipient yet — deferred payment
@@ -464,7 +559,11 @@ export class ReservoirService {
       return null;
     }
 
-    const storedPipeKey = JSON.parse(matchingPipe.pipe_key_json) as typeof pipeKey;
+    const storedPipeKey = JSON.parse(matchingPipe.pipe_key_json) as {
+      'principal-1': string;
+      'principal-2': string;
+      token: string | null;
+    };
 
     const currentServerBalance = BigInt(matchingPipe.server_balance);
     if (currentServerBalance < outgoingAmount) {
@@ -500,6 +599,7 @@ export class ReservoirService {
         pipeKey: storedPipeKey,
         forPrincipal: args.recipientAddr,
         withPrincipal: this.serverAddress,
+        signerAddress: this.signerAddress,
         myBalance: nextRecipientBalance,
         theirBalance: nextServerBalance,
         nonce: nextNonce,
@@ -541,10 +641,11 @@ export class ReservoirService {
    */
   async createTapWithBorrowedLiquidityParams(args: {
     borrower: string;
+    token: string | null;
     tapAmount: string;
     tapNonce: string;
     borrowAmount: string;
-    borrowFee: string;
+    borrowFee?: string;
     myBalance: string;
     reservoirBalance: string;
     borrowNonce: string;
@@ -559,11 +660,13 @@ export class ReservoirService {
     if (!this.contractId) {
       throw new ReservoirError(503, 'stackflow contract not configured', 'stackflow-contract-missing');
     }
+    if (!this.reservoirContractId) {
+      throw new ReservoirError(503, 'reservoir contract not configured', 'reservoir-contract-missing');
+    }
 
     let tapAmount: bigint;
     let tapNonce: bigint;
     let borrowAmount: bigint;
-    let borrowFee: bigint;
     let myBalance: bigint;
     let reservoirBalance: bigint;
     let borrowNonce: bigint;
@@ -571,7 +674,6 @@ export class ReservoirService {
       tapAmount = BigInt(args.tapAmount);
       tapNonce = BigInt(args.tapNonce);
       borrowAmount = BigInt(args.borrowAmount);
-      borrowFee = BigInt(args.borrowFee);
       myBalance = BigInt(args.myBalance);
       reservoirBalance = BigInt(args.reservoirBalance);
       borrowNonce = BigInt(args.borrowNonce);
@@ -581,7 +683,17 @@ export class ReservoirService {
 
     if (tapAmount <= 0n) throw new ReservoirError(400, 'tapAmount must be > 0', 'invalid-tap-amount');
     if (borrowAmount <= 0n) throw new ReservoirError(400, 'borrowAmount must be > 0', 'invalid-borrow-amount');
-    if (borrowFee < 0n) throw new ReservoirError(400, 'borrowFee must be >= 0', 'invalid-borrow-fee');
+    if (args.borrowFee != null && args.borrowFee.trim() !== '') {
+      let providedBorrowFee: bigint;
+      try {
+        providedBorrowFee = BigInt(args.borrowFee);
+      } catch {
+        throw new ReservoirError(400, 'borrowFee must be a valid integer', 'invalid-borrow-fee');
+      }
+      if (providedBorrowFee < 0n) {
+        throw new ReservoirError(400, 'borrowFee must be >= 0', 'invalid-borrow-fee');
+      }
+    }
     if (borrowNonce <= tapNonce) throw new ReservoirError(400, 'borrowNonce must be > tapNonce', 'invalid-borrow-nonce');
     if (myBalance !== tapAmount) {
       throw new ReservoirError(400, 'myBalance must equal tapAmount for initial borrow', 'invalid-my-balance');
@@ -590,11 +702,17 @@ export class ReservoirService {
       throw new ReservoirError(400, 'reservoirBalance must equal borrowAmount for initial borrow', 'invalid-reservoir-balance');
     }
 
-    const principals = canonicalPipePrincipals(args.borrower, this.serverAddress);
+    const token = args.token == null || args.token.trim() === '' ? null : args.token.trim();
+    if (token !== null && !isContractPrincipal(token)) {
+      throw new ReservoirError(400, 'token must be a contract principal or null', 'invalid-token');
+    }
+
+    const reservoirPrincipal = this.reservoirContractId;
+    const principals = canonicalPipePrincipals(args.borrower, reservoirPrincipal);
     const pipeKey = {
       'principal-1': principals['principal-1'],
       'principal-2': principals['principal-2'],
-      token: null as string | null,
+      token,
     };
 
     const userState: TransferState = {
@@ -604,7 +722,7 @@ export class ReservoirService {
       theirBalance: reservoirBalance.toString(),
       nonce: borrowNonce.toString(),
       action: '2',
-      actor: this.serverAddress,
+      actor: reservoirPrincipal,
       hashedSecret: null,
       validAfter: null,
     };
@@ -622,12 +740,12 @@ export class ReservoirService {
 
     const reservoirState: TransferState = {
       pipeKey,
-      forPrincipal: this.serverAddress,
+      forPrincipal: reservoirPrincipal,
       myBalance: reservoirBalance.toString(),
       theirBalance: myBalance.toString(),
       nonce: borrowNonce.toString(),
       action: '2',
-      actor: this.serverAddress,
+      actor: reservoirPrincipal,
       hashedSecret: null,
       validAfter: null,
     };
@@ -638,6 +756,7 @@ export class ReservoirService {
       this.serverPrivateKey,
       this.chainId,
     );
+    const borrowFee = await this.fetchBorrowFeeFromReservoir(borrowAmount);
 
     return {
       borrowFee: borrowFee.toString(),

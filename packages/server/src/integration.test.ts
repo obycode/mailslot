@@ -42,7 +42,18 @@ class MockPaymentService implements IPaymentService {
     return null;
   }
 
-  async createTapWithBorrowedLiquidityParams(): Promise<{ borrowFee: string; reservoirSignature: string }> {
+  async createTapWithBorrowedLiquidityParams(_: {
+    borrower: string;
+    token: string | null;
+    tapAmount: string;
+    tapNonce: string;
+    borrowAmount: string;
+    borrowFee?: string;
+    myBalance: string;
+    reservoirBalance: string;
+    borrowNonce: string;
+    mySignature: string;
+  }): Promise<{ borrowFee: string; reservoirSignature: string }> {
     return { borrowFee: '0', reservoirSignature: '0x' + '00'.repeat(65) };
   }
 }
@@ -108,6 +119,7 @@ const serverConfig: Config = {
   serverStxAddress: 'SP_SERVER',
   serverPrivateKey: '',
   sfContractId: 'SP3QFYVTMS0PRJT3K3GMDW9DGR33TDHENSDWVNQMR.sm-stackflow',
+  reservoirContractId: 'SP3QFYVTMS0PRJT3K3GMDW9DGR33TDHENSDWVNQMR.sm-reservoir',
   chainId: 1,
   messagePriceSats: '1000',
   minFeeSats: '100',

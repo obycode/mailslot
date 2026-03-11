@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { principalCV, serializeCVBytes } from '@stacks/transactions';
 
 type ClarityValue =
   | { type: 'uint'; value: number | bigint | string }
@@ -18,28 +19,6 @@ const SF_VERSION = '0.6.0';
 
 function sha256(data: Buffer): Buffer {
   return createHash('sha256').update(data).digest();
-}
-
-function c32DecodeFixed(encoded: string, expectedBytes: number): Buffer {
-  const result = Buffer.alloc(expectedBytes, 0);
-  let carry = 0;
-  let carryBits = 0;
-  let byteIdx = expectedBytes - 1;
-
-  for (let i = encoded.length - 1; i >= 0 && byteIdx >= 0; i--) {
-    const ch = encoded[i].toUpperCase();
-    const val = C32_CHARS.indexOf(ch);
-    if (val < 0) throw new Error(`Invalid c32 character: ${ch}`);
-    carry |= (val << carryBits);
-    carryBits += 5;
-    if (carryBits >= 8) {
-      result[byteIdx--] = carry & 0xff;
-      carry >>= 8;
-      carryBits -= 8;
-    }
-  }
-
-  return result;
 }
 
 function c32encode(data: Buffer): string {
@@ -72,16 +51,6 @@ function pubkeyToStxAddress(pubkeyHex: string, testnet = false): string {
   return c32checkEncode(version, digest);
 }
 
-export function parseStxAddress(address: string): { version: number; hash160: Buffer } {
-  const dotIdx = address.indexOf('.');
-  const addr = dotIdx >= 0 ? address.slice(0, dotIdx) : address;
-  if (addr.length < 3 || addr[0] !== 'S') throw new Error(`Invalid STX address: ${addr}`);
-  const version = C32_CHARS.indexOf(addr[1].toUpperCase());
-  if (version < 0) throw new Error(`Invalid STX address version: ${addr[1]}`);
-  const decoded = c32DecodeFixed(addr.slice(2), 24);
-  return { version, hash160: decoded.subarray(0, 20) };
-}
-
 function u32be(n: number): Buffer {
   const b = Buffer.alloc(4);
   b.writeUInt32BE(n, 0);
@@ -99,19 +68,7 @@ function u128be(n: bigint): Buffer {
 }
 
 function serializePrincipal(value: string): Buffer {
-  const dotIdx = value.indexOf('.');
-  if (dotIdx < 0) {
-    const { version, hash160 } = parseStxAddress(value);
-    return Buffer.concat([Buffer.from([0x05, version]), hash160]);
-  }
-  const { version, hash160 } = parseStxAddress(value.slice(0, dotIdx));
-  const nameBytes = Buffer.from(value.slice(dotIdx + 1), 'ascii');
-  return Buffer.concat([
-    Buffer.from([0x06, version]),
-    hash160,
-    Buffer.from([nameBytes.length]),
-    nameBytes,
-  ]);
+  return Buffer.from(serializeCVBytes(principalCV(value)));
 }
 
 function serializeClarityValue(cv: ClarityValue): Buffer {
@@ -228,36 +185,47 @@ async function sip018Verify(
     const { secp256k1 } = await import('@noble/curves/secp256k1');
     const hash = computeSip018Hash(contractId, message, chainId);
     const sigBytes = Buffer.from(signatureHex.replace(/^0x/, ''), 'hex');
+    const normalizeRecoveryId = (raw: number): number | null => {
+      if (raw === 0 || raw === 1) return raw;
+      if (raw === 27 || raw === 28) return raw - 27;
+      return null;
+    };
 
+    const candidates: Array<{ compact: Uint8Array; recoveryId: number }> = [];
     if (sigBytes.length === 64) {
-      for (const recoveryId of [0, 1]) {
-        try {
-          const sig = secp256k1.Signature.fromCompact(sigBytes).addRecoveryBit(recoveryId);
-          const pubkeyBytes = sig.recoverPublicKey(hash).toRawBytes(true);
-          const pubkeyHex = Buffer.from(pubkeyBytes).toString('hex');
-          if (
-            pubkeyToStxAddress(pubkeyHex) === expectedAddress ||
-            pubkeyToStxAddress(pubkeyHex, true) === expectedAddress
-          ) {
-            return true;
-          }
-        } catch {
-          // Try the next recovery ID.
-        }
+      candidates.push({ compact: sigBytes, recoveryId: 0 });
+      candidates.push({ compact: sigBytes, recoveryId: 1 });
+    } else if (sigBytes.length === 65) {
+      const vrsRecovery = normalizeRecoveryId(sigBytes[0]);
+      if (vrsRecovery != null) {
+        candidates.push({ compact: sigBytes.subarray(1), recoveryId: vrsRecovery });
       }
+      const rsvRecovery = normalizeRecoveryId(sigBytes[64]);
+      if (rsvRecovery != null) {
+        candidates.push({ compact: sigBytes.subarray(0, 64), recoveryId: rsvRecovery });
+      }
+    } else {
       return false;
     }
-    if (sigBytes.length !== 65) return false;
 
-    const recoveryId = sigBytes[0];
-    const compact = sigBytes.subarray(1);
-    const sig = secp256k1.Signature.fromCompact(compact).addRecoveryBit(recoveryId);
-    const pubkeyBytes = sig.recoverPublicKey(hash).toRawBytes(true);
-    const pubkeyHex = Buffer.from(pubkeyBytes).toString('hex');
-    return (
-      pubkeyToStxAddress(pubkeyHex) === expectedAddress ||
-      pubkeyToStxAddress(pubkeyHex, true) === expectedAddress
-    );
+    for (const candidate of candidates) {
+      try {
+        const sig = secp256k1.Signature
+          .fromCompact(candidate.compact)
+          .addRecoveryBit(candidate.recoveryId);
+        const pubkeyBytes = sig.recoverPublicKey(hash).toRawBytes(true);
+        const pubkeyHex = Buffer.from(pubkeyBytes).toString('hex');
+        if (
+          pubkeyToStxAddress(pubkeyHex) === expectedAddress ||
+          pubkeyToStxAddress(pubkeyHex, true) === expectedAddress
+        ) {
+          return true;
+        }
+      } catch {
+        // Try the next candidate.
+      }
+    }
+    return false;
   } catch {
     return false;
   }
@@ -271,6 +239,7 @@ export async function verifyPendingPaymentProof(args: {
   const state = args.pendingPayment.stateProof;
   const contractId = typeof state['contractId'] === 'string' ? state['contractId'] : '';
   const withPrincipal = typeof state['withPrincipal'] === 'string' ? state['withPrincipal'] : '';
+  const signerAddress = typeof state['signerAddress'] === 'string' ? state['signerAddress'] : '';
   const forPrincipal = typeof state['forPrincipal'] === 'string' ? state['forPrincipal'] : '';
   const actor = typeof state['actor'] === 'string' ? state['actor'] : '';
   const theirSignature = typeof state['theirSignature'] === 'string' ? state['theirSignature'] : '';
@@ -321,8 +290,9 @@ export async function verifyPendingPaymentProof(args: {
 
   const chainIds = args.chainId == null ? [1, 2147483648] : [args.chainId];
   let valid = false;
+  const signer = signerAddress || withPrincipal;
   for (const chainId of chainIds) {
-    if (await sip018Verify(contractId, message, theirSignature, withPrincipal, chainId)) {
+    if (await sip018Verify(contractId, message, theirSignature, signer, chainId)) {
       valid = true;
       break;
     }

@@ -6,10 +6,12 @@
  *   message = { action, actor, balance-1, balance-2, hashed-secret, nonce, principal-1, principal-2, token, valid-after }
  *   hash = sha256("SIP018" || sha256(clarity_serialize(domain)) || sha256(clarity_serialize(message)))
  *
- * Signatures are 65 bytes: [recovery_id (0|1), r (32 bytes), s (32 bytes)]
+ * Signatures are 65 bytes. Wallets commonly return RSV (r||s||v), while some
+ * tooling emits VRS (v||r||s). Verification accepts both forms.
  */
 
 import { createHash } from 'node:crypto';
+import { principalCV, serializeCVBytes } from '@stacks/transactions';
 
 // ─── Clarity value types ──────────────────────────────────────────────────────
 
@@ -25,49 +27,6 @@ export type ClarityValue =
 /** Typed message object as used in agent-service.js */
 export type TypedField = { type: string; value?: unknown };
 export type TypedMessage = Record<string, TypedField>;
-
-// ─── c32 address decoding ─────────────────────────────────────────────────────
-
-const C32_CHARS = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-
-/**
- * Decode a c32-encoded string to fixed-size byte array.
- * Uses the reverse of the c32encode algorithm: processes chars right-to-left,
- * accumulates bits, outputs bytes right-to-left.
- */
-function c32DecodeFixed(encoded: string, expectedBytes: number): Buffer {
-  const result = Buffer.alloc(expectedBytes, 0);
-  let carry = 0;
-  let carryBits = 0;
-  let byteIdx = expectedBytes - 1;
-
-  for (let i = encoded.length - 1; i >= 0 && byteIdx >= 0; i--) {
-    const ch = encoded[i].toUpperCase();
-    const val = C32_CHARS.indexOf(ch);
-    if (val < 0) throw new Error(`Invalid c32 character: ${ch}`);
-    carry |= (val << carryBits);
-    carryBits += 5;
-    if (carryBits >= 8) {
-      result[byteIdx--] = carry & 0xff;
-      carry >>= 8;
-      carryBits -= 8;
-    }
-  }
-
-  return result;
-}
-
-/** Parse "SP..." or "ST..." address to (version, hash160). Also accepts "SP...addr.contract". */
-export function parseStxAddress(address: string): { version: number; hash160: Buffer } {
-  const dotIdx = address.indexOf('.');
-  const addr = dotIdx >= 0 ? address.slice(0, dotIdx) : address;
-  if (addr.length < 3 || addr[0] !== 'S') throw new Error(`Invalid STX address: ${addr}`);
-  const version = C32_CHARS.indexOf(addr[1].toUpperCase());
-  if (version < 0) throw new Error(`Invalid STX address version: ${addr[1]}`);
-  // 24 bytes = 20-byte hash160 + 4-byte checksum
-  const decoded = c32DecodeFixed(addr.slice(2), 24);
-  return { version, hash160: decoded.subarray(0, 20) };
-}
 
 // ─── Clarity serialization ────────────────────────────────────────────────────
 
@@ -88,19 +47,8 @@ function u128be(n: bigint): Buffer {
 }
 
 function serializePrincipal(value: string): Buffer {
-  const dotIdx = value.indexOf('.');
-  if (dotIdx < 0) {
-    const { version, hash160 } = parseStxAddress(value);
-    return Buffer.concat([Buffer.from([0x05, version]), hash160]);
-  }
-  const { version, hash160 } = parseStxAddress(value.slice(0, dotIdx));
-  const nameBytes = Buffer.from(value.slice(dotIdx + 1), 'ascii');
-  return Buffer.concat([
-    Buffer.from([0x06, version]),
-    hash160,
-    Buffer.from([nameBytes.length]),
-    nameBytes,
-  ]);
+  // Delegate to canonical principal serialization from @stacks/transactions.
+  return Buffer.from(serializeCVBytes(principalCV(value)));
 }
 
 /** Serialize a Clarity value to its consensus-buff representation. Tuples are field-sorted. */
@@ -229,7 +177,7 @@ export function buildTransferMessage(state: TransferState): TypedMessage {
 
 // ─── Sign / Verify ────────────────────────────────────────────────────────────
 
-/** Sign a SIP-018 message; returns 65-byte hex: [recovery_id, r, s] */
+/** Sign a SIP-018 message; returns 65-byte RSV hex: [r, s, recovery_id] */
 export async function sip018Sign(
   contractId: string,
   message: TypedMessage,
@@ -241,14 +189,47 @@ export async function sip018Sign(
   const privKey = Buffer.from(privateKeyHex.replace(/^0x/, ''), 'hex');
   const sig = secp256k1.sign(hash, privKey, { lowS: true });
   const compact = sig.toCompactRawBytes();
-  const full = Buffer.concat([Buffer.from([sig.recovery ?? 0]), Buffer.from(compact)]);
+  // Emit RSV to match wallet output and Clarity contract expectations.
+  const full = Buffer.concat([Buffer.from(compact), Buffer.from([sig.recovery ?? 0])]);
   return '0x' + full.toString('hex');
+}
+
+function normalizeRecoveryId(raw: number): number | null {
+  if (raw === 0 || raw === 1) return raw;
+  if (raw === 27 || raw === 28) return raw - 27;
+  return null;
+}
+
+function signatureCandidates(sigBytes: Buffer): Array<{ compact: Uint8Array; recoveryId: number }> {
+  if (sigBytes.length === 64) {
+    return [
+      { compact: sigBytes, recoveryId: 0 },
+      { compact: sigBytes, recoveryId: 1 },
+    ];
+  }
+  if (sigBytes.length !== 65) return [];
+
+  const out: Array<{ compact: Uint8Array; recoveryId: number }> = [];
+
+  // VRS: [v || r || s]
+  const vrsRecovery = normalizeRecoveryId(sigBytes[0]);
+  if (vrsRecovery != null) {
+    out.push({ compact: sigBytes.subarray(1), recoveryId: vrsRecovery });
+  }
+
+  // RSV: [r || s || v]
+  const rsvRecovery = normalizeRecoveryId(sigBytes[64]);
+  if (rsvRecovery != null) {
+    out.push({ compact: sigBytes.subarray(0, 64), recoveryId: rsvRecovery });
+  }
+
+  return out;
 }
 
 /**
  * Verify a SIP-018 signature by recovering the public key from the signature
  * and checking it maps to the expectedAddress.
- * Handles 65-byte [recovery_id, r, s] format.
+ * Accepts both RSV and VRS 65-byte signatures, plus raw 64-byte signatures.
  */
 export async function sip018Verify(
   contractId: string,
@@ -263,38 +244,24 @@ export async function sip018Verify(
 
     const hash = computeSip018Hash(contractId, message, chainId);
     const sigBytes = Buffer.from(signatureHex.replace(/^0x/, ''), 'hex');
-
-    let recoveryId: number;
-    let compact: Uint8Array;
-
-    if (sigBytes.length === 65) {
-      recoveryId = sigBytes[0];
-      compact = sigBytes.subarray(1);
-    } else if (sigBytes.length === 64) {
-      // No recovery byte — try both recovery IDs
-      for (const rid of [0, 1]) {
-        try {
-          const sig = secp256k1.Signature.fromCompact(sigBytes).addRecoveryBit(rid);
-          const pubkeyBytes = sig.recoverPublicKey(hash).toRawBytes(true);
-          const pubkeyHex = Buffer.from(pubkeyBytes).toString('hex');
-          if (
-            pubkeyToStxAddress(pubkeyHex) === expectedAddress ||
-            pubkeyToStxAddress(pubkeyHex, true) === expectedAddress
-          ) return true;
-        } catch { /* try next */ }
+    for (const candidate of signatureCandidates(sigBytes)) {
+      try {
+        const sig = secp256k1.Signature
+          .fromCompact(candidate.compact)
+          .addRecoveryBit(candidate.recoveryId);
+        const pubkeyBytes = sig.recoverPublicKey(hash).toRawBytes(true);
+        const pubkeyHex = Buffer.from(pubkeyBytes).toString('hex');
+        if (
+          pubkeyToStxAddress(pubkeyHex) === expectedAddress ||
+          pubkeyToStxAddress(pubkeyHex, true) === expectedAddress
+        ) {
+          return true;
+        }
+      } catch {
+        // Try the next signature layout/recovery option.
       }
-      return false;
-    } else {
-      return false;
     }
-
-    const sig = secp256k1.Signature.fromCompact(compact).addRecoveryBit(recoveryId);
-    const pubkeyBytes = sig.recoverPublicKey(hash).toRawBytes(true);
-    const pubkeyHex = Buffer.from(pubkeyBytes).toString('hex');
-    return (
-      pubkeyToStxAddress(pubkeyHex) === expectedAddress ||
-      pubkeyToStxAddress(pubkeyHex, true) === expectedAddress
-    );
+    return false;
   } catch {
     return false;
   }

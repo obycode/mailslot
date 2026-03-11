@@ -58,6 +58,7 @@ const testConfig: Config = {
   serverStxAddress: 'SP123',
   serverPrivateKey: '',
   sfContractId: '',
+  reservoirContractId: '',
   chainId: 1,
   messagePriceSats: '1000',
   minFeeSats: '100',

@@ -27,10 +27,11 @@ export interface IPaymentService {
   }): Promise<PendingPayment | null>;
   createTapWithBorrowedLiquidityParams(args: {
     borrower: string;
+    token: string | null;
     tapAmount: string;
     tapNonce: string;
     borrowAmount: string;
-    borrowFee: string;
+    borrowFee?: string;
     myBalance: string;
     reservoirBalance: string;
     borrowNonce: string;
@@ -49,6 +50,7 @@ export function createMailServer(
   paymentService: IPaymentService,
 ): ReturnType<typeof createServer> {
   const sfContractId = config.sfContractId;
+  const pipeCounterparty = config.reservoirContractId || config.serverStxAddress;
   const __filename = fileURLToPath(import.meta.url);
   const WEB_DIR = join(dirname(__filename), '..', 'web');
   const WEB_DIR_RESOLVED = resolve(WEB_DIR);
@@ -63,7 +65,7 @@ export function createMailServer(
         accepts: [{ mode: 'direct', scheme: 'stackflow' }],
         amount: config.messagePriceSats,
         stackflowNodeUrl: config.stackflowNodeUrl,
-        serverAddress: config.serverStxAddress,
+        serverAddress: pipeCounterparty,
       });
     }
 
@@ -264,26 +266,30 @@ export function createMailServer(
     }
 
     const borrower = typeof data['borrower'] === 'string' ? data['borrower'] : '';
+    const tokenRaw = data['token'];
+    const token = typeof tokenRaw === 'string' ? tokenRaw.trim() : (tokenRaw == null ? null : '__invalid__');
     const tapAmount = String(data['tapAmount'] ?? '');
     const tapNonce = String(data['tapNonce'] ?? '');
     const borrowAmount = String(data['borrowAmount'] ?? '');
-    const borrowFee = String(data['borrowFee'] ?? '');
+    const borrowFeeRaw = data['borrowFee'];
+    const borrowFee = typeof borrowFeeRaw === 'string' ? borrowFeeRaw.trim() : '';
     const myBalance = String(data['myBalance'] ?? '');
     const reservoirBalance = String(data['reservoirBalance'] ?? '');
     const borrowNonce = String(data['borrowNonce'] ?? '');
     const mySignature = typeof data['mySignature'] === 'string' ? data['mySignature'] : '';
 
-    if (!borrower || !tapAmount || !tapNonce || !borrowAmount || !borrowFee || !myBalance || !reservoirBalance || !borrowNonce || !mySignature) {
+    if (token === '__invalid__' || !borrower || !tapAmount || !tapNonce || !borrowAmount || !myBalance || !reservoirBalance || !borrowNonce || !mySignature) {
       return json(res, 400, { error: 'invalid-params', message: 'missing required borrow params' });
     }
 
     try {
       const signed = await paymentService.createTapWithBorrowedLiquidityParams({
         borrower,
+        token: token || null,
         tapAmount,
         tapNonce,
         borrowAmount,
-        borrowFee,
+        borrowFee: borrowFee || undefined,
         myBalance,
         reservoirBalance,
         borrowNonce,
@@ -292,7 +298,7 @@ export function createMailServer(
       return json(res, 200, {
         ok: true,
         stackflowContractId: sfContractId,
-        token: null,
+        token: token || null,
         tapAmount,
         tapNonce,
         borrowAmount,
@@ -332,7 +338,9 @@ export function createMailServer(
     if (method === 'GET' && path === '/status') {
       return json(res, 200, {
         ok: true,
-        serverAddress: config.serverStxAddress,
+        serverAddress: pipeCounterparty,
+        signerAddress: config.serverStxAddress,
+        reservoirContract: config.reservoirContractId,
         sfContract: config.sfContractId,
         messagePriceSats: config.messagePriceSats,
         minFeeSats: config.minFeeSats,

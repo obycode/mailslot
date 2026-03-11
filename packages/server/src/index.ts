@@ -37,6 +37,15 @@ function isPrincipal(value: string): boolean {
   return isStandardPrincipal(value) || isContractPrincipal(value);
 }
 
+function normalizeContractPrincipal(value: string): string | null {
+  const normalized = value.trim();
+  if (!normalized) return null;
+  if (!isContractPrincipal(normalized)) {
+    throw new Error('STACKMAIL_RESERVOIR_CONTRACT_ID must be a valid contract principal');
+  }
+  return normalized;
+}
+
 function deriveStxAddressFromPrivateKey(privateKeyHex: string, chainId: number): string {
   const pubkey = secp256k1.getPublicKey(privateKeyHex, true);
   const pubkeyHex = Buffer.from(pubkey).toString('hex');
@@ -46,7 +55,12 @@ function deriveStxAddressFromPrivateKey(privateKeyHex: string, chainId: number):
 function resolveServerIdentity(
   config: Config,
   db: import('better-sqlite3').Database,
-): { privateKey: string; address: string; source: ServerIdentitySource } {
+): {
+  privateKey: string;
+  signerAddress: string;
+  legacyReservoirAddress: string | null;
+  source: ServerIdentitySource;
+} {
   db.exec(`
     CREATE TABLE IF NOT EXISTS meta (
       key   TEXT PRIMARY KEY,
@@ -77,6 +91,8 @@ function resolveServerIdentity(
   if (envAddress && !isPrincipal(envAddress)) {
     throw new Error('STACKMAIL_SERVER_STX_ADDRESS must be a valid STX principal');
   }
+  const envStandardAddress = envAddress && isStandardPrincipal(envAddress) ? envAddress : null;
+  const envLegacyReservoirAddress = envAddress && isContractPrincipal(envAddress) ? envAddress : null;
 
   let source: ServerIdentitySource = 'env';
   let privateKey = normalizePrivateKeyHex(envKeyRaw);
@@ -92,25 +108,32 @@ function resolveServerIdentity(
     source = 'generated';
   }
 
-  const derivedAddress = deriveStxAddressFromPrivateKey(privateKey, config.chainId);
+  const derivedSignerAddress = deriveStxAddressFromPrivateKey(privateKey, config.chainId);
 
   const storedAddress = normalizePrincipal(getMeta('server_stx_address') ?? '');
-  const address = envAddress ?? storedAddress ?? derivedAddress;
-  if (!isPrincipal(address)) {
-    throw new Error('unable to resolve a valid server STX principal');
+  const storedStandardAddress = storedAddress && isStandardPrincipal(storedAddress) ? storedAddress : null;
+  const storedLegacyReservoirAddress = storedAddress && isContractPrincipal(storedAddress)
+    ? storedAddress
+    : null;
+
+  const signerAddress = envStandardAddress ?? storedStandardAddress ?? derivedSignerAddress;
+  if (!isStandardPrincipal(signerAddress)) {
+    throw new Error('unable to resolve a valid signer STX principal');
   }
 
-  // For standard principals, enforce key/address consistency.
-  if (isStandardPrincipal(address) && address !== derivedAddress) {
+  // Signer principals must match the configured private key.
+  if (signerAddress !== derivedSignerAddress) {
     throw new Error(
-      `server address (${address}) does not match configured signing key-derived address (${derivedAddress})`,
+      `server signer address (${signerAddress}) does not match configured signing key-derived address (${derivedSignerAddress})`,
     );
   }
 
+  const legacyReservoirAddress = envLegacyReservoirAddress ?? storedLegacyReservoirAddress ?? null;
+
   // Keep identity durable for container restarts.
   setMeta('server_private_key', privateKey);
-  setMeta('server_stx_address', address);
-  return { privateKey, address, source };
+  setMeta('server_stx_address', signerAddress);
+  return { privateKey, signerAddress, legacyReservoirAddress, source };
 }
 
 async function main(): Promise<void> {
@@ -130,24 +153,39 @@ async function main(): Promise<void> {
 
   const identity = resolveServerIdentity(config, reservoirDb);
   config.serverPrivateKey = identity.privateKey;
-  config.serverStxAddress = identity.address;
+  config.serverStxAddress = identity.signerAddress;
+
+  const envReservoir = normalizeContractPrincipal(config.reservoirContractId);
+  config.reservoirContractId = envReservoir ?? identity.legacyReservoirAddress ?? '';
+
   if (identity.source === 'generated') {
     console.warn(
-      `stackmail: generated server key and persisted it to DB meta (address: ${config.serverStxAddress})`,
+      `stackmail: generated server key and persisted it to DB meta (signer: ${config.serverStxAddress})`,
     );
   } else if (identity.source === 'db') {
     console.warn(
-      `stackmail: loaded server key from DB meta (address: ${config.serverStxAddress})`,
+      `stackmail: loaded server key from DB meta (signer: ${config.serverStxAddress})`,
     );
   }
+  if (!envReservoir && identity.legacyReservoirAddress) {
+    console.warn(
+      `stackmail: using legacy STACKMAIL_SERVER_STX_ADDRESS contract principal as reservoir (${identity.legacyReservoirAddress}); set STACKMAIL_RESERVOIR_CONTRACT_ID explicitly`,
+    );
+  }
+  console.log(`stackmail: signer address=${config.serverStxAddress}`);
 
   if (!config.sfContractId) {
     console.warn('stackmail: STACKMAIL_SF_CONTRACT_ID not set — outgoing payments disabled');
   }
+  if (!config.reservoirContractId) {
+    console.warn('stackmail: reservoir contract not configured — tap onboarding disabled');
+  }
 
   const reservoir = new ReservoirService({
     db: reservoirDb,
-    serverAddress: config.serverStxAddress,
+    serverAddress: config.reservoirContractId || config.serverStxAddress,
+    signerAddress: config.serverStxAddress,
+    reservoirContractId: config.reservoirContractId,
     serverPrivateKey: config.serverPrivateKey,
     contractId: config.sfContractId,
     chainId: config.chainId,

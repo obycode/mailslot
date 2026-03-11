@@ -15,7 +15,6 @@ import {
   stringAsciiCV,
   bufferCV,
   hexToCV,
-  cvToValue,
   Pc,
   PostConditionMode,
   serializeCVBytes,
@@ -78,6 +77,167 @@ function extractSignature(resp: unknown): string | null {
   return (resp as { result?: { signature?: string }; signature?: string })?.result?.signature
     ?? (resp as { signature?: string })?.signature
     ?? null;
+}
+
+function isContractPrincipal(value: string): boolean {
+  return /^S[PT][0-9A-Z]{39}\.[a-zA-Z][a-zA-Z0-9-]{0,39}$/.test(value);
+}
+
+function getRuntimeSfContract(): string {
+  const sf = typeof serverStatus.sfContract === 'string' ? serverStatus.sfContract.trim() : '';
+  return sf || SF_CONTRACT;
+}
+
+function getRuntimeReservoirContract(): string {
+  const reservoir = typeof serverStatus.reservoirContract === 'string'
+    ? serverStatus.reservoirContract.trim()
+    : '';
+  if (isContractPrincipal(reservoir)) return reservoir;
+  const addr = typeof serverStatus.serverAddress === 'string' ? serverStatus.serverAddress.trim() : '';
+  if (isContractPrincipal(addr)) return addr;
+  return RESERVOIR;
+}
+
+function hasSupportedTokenResolved(): boolean {
+  return Object.prototype.hasOwnProperty.call(serverStatus, 'supportedToken');
+}
+
+function getRuntimeSupportedToken(): string | null {
+  const token = serverStatus.supportedToken;
+  if (token == null) return null;
+  if (typeof token !== 'string') {
+    throw new Error('Invalid supported token in server status');
+  }
+  const normalized = token.trim();
+  if (!normalized) return null;
+  if (!isContractPrincipal(normalized)) {
+    throw new Error(`Invalid supported token principal: ${normalized}`);
+  }
+  return normalized;
+}
+
+function getRuntimeSupportedTokenAssetName(): string | null {
+  const raw = serverStatus.supportedTokenAssetName;
+  if (raw == null) return null;
+  if (typeof raw !== 'string') {
+    throw new Error('Invalid supported token asset name in server status');
+  }
+  const normalized = raw.trim();
+  if (!normalized) return null;
+  return normalized;
+}
+
+function optionalPrincipalCvHex(value: string | null): string {
+  const cv = value == null ? noneCV() : someCV(principalCV(value));
+  return bytesToHex(serializeCVBytes(cv));
+}
+
+function parseFungibleTokenNameFromInterface(
+  payload: Record<string, unknown>,
+  contractId: string,
+): string | null {
+  const pickFromContainer = (container: unknown): string | null => {
+    if (!container || typeof container !== 'object') return null;
+    const tokens = (container as { fungible_tokens?: unknown }).fungible_tokens;
+    if (!Array.isArray(tokens) || tokens.length === 0) return null;
+    for (const token of tokens) {
+      if (typeof token === 'string' && token.trim()) return token.trim();
+      if (token && typeof token === 'object') {
+        const obj = token as Record<string, unknown>;
+        const name = typeof obj.name === 'string' ? obj.name.trim() : '';
+        if (name) return name;
+        const assetId = typeof obj.asset_identifier === 'string' ? obj.asset_identifier : '';
+        if (assetId.startsWith(`${contractId}::`)) return assetId.slice(`${contractId}::`.length);
+      }
+    }
+    return null;
+  };
+  return pickFromContainer(payload) ?? pickFromContainer(payload.abi);
+}
+
+async function fetchFungibleTokenName(
+  tokenContract: string,
+  chainId: number,
+): Promise<string> {
+  const [contractAddr, contractName] = tokenContract.split('.');
+  const r = await fetch(
+    `${chainIdToHiroApi(chainId)}/v2/contracts/interface/${contractAddr}/${contractName}`,
+  );
+  if (!r.ok) {
+    throw new Error(`Failed to read token interface from ${tokenContract} (${r.status})`);
+  }
+  const payload = await r.json() as Record<string, unknown>;
+  const name = parseFungibleTokenNameFromInterface(payload, tokenContract);
+  if (!name) {
+    throw new Error(`Could not determine fungible token asset name for ${tokenContract}`);
+  }
+  return name;
+}
+
+async function fetchReservoirSupportedToken(
+  reservoirContract: string,
+  chainId: number,
+): Promise<string | null> {
+  const [contractAddr, contractName] = reservoirContract.split('.');
+  const r = await fetch(
+    `${chainIdToHiroApi(chainId)}/v2/data_var/${contractAddr}/${contractName}/supported-token`,
+  );
+  if (!r.ok) {
+    throw new Error(`Failed to read supported-token from reservoir (${r.status})`);
+  }
+  const payload = await r.json() as Record<string, unknown>;
+  const directHex =
+    (typeof payload.data === 'string' ? payload.data : null)
+    ?? (typeof payload.result === 'string' ? payload.result : null)
+    ?? (typeof payload.value === 'string' ? payload.value : null)
+    ?? (typeof payload.hex === 'string' ? payload.hex : null);
+  if (!directHex || !directHex.startsWith('0x')) {
+    throw new Error('Unexpected supported-token response format');
+  }
+
+  const cv = hexToCV(directHex);
+  if (cv.type === ClarityType.OptionalNone) return null;
+  if (cv.type === ClarityType.OptionalSome) {
+    const nested = cv.value;
+    if (nested.type === ClarityType.PrincipalContract || nested.type === ClarityType.PrincipalStandard) {
+      return nested.value;
+    }
+  }
+  throw new Error('supported-token is not an optional principal');
+}
+
+async function ensureServerStatusLoaded(): Promise<void> {
+  if (
+    typeof serverStatus.sfContract === 'string' &&
+    typeof serverStatus.serverAddress === 'string' &&
+    typeof serverStatus.chainId === 'number'
+  ) {
+    return;
+  }
+  await loadStatus();
+}
+
+async function ensureSupportedTokenLoaded(): Promise<void> {
+  await ensureServerStatusLoaded();
+  if (hasSupportedTokenResolved()) return;
+  const reservoir = getRuntimeReservoirContract();
+  const chainId = (serverStatus.chainId as number | undefined) ?? CHAIN_ID;
+  const supportedToken = await fetchReservoirSupportedToken(reservoir, chainId);
+  serverStatus.supportedToken = supportedToken;
+}
+
+async function ensureSupportedTokenAssetNameLoaded(): Promise<void> {
+  await ensureSupportedTokenLoaded();
+  const tokenContract = getRuntimeSupportedToken();
+  if (tokenContract == null) {
+    serverStatus.supportedTokenAssetName = null;
+    return;
+  }
+  const existing = getRuntimeSupportedTokenAssetName();
+  if (existing) return;
+  const chainId = (serverStatus.chainId as number | undefined) ?? CHAIN_ID;
+  const tokenName = await fetchFungibleTokenName(tokenContract, chainId);
+  serverStatus.supportedTokenAssetName = tokenName;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -308,6 +468,12 @@ async function onWalletConnected(): Promise<void> {
   setAppState('checking');
   (document.getElementById('checking-label') as HTMLElement).textContent = 'Checking payment channel…';
 
+  try {
+    await ensureServerStatusLoaded();
+  } catch {
+    // Continue with defaults if status is temporarily unavailable.
+  }
+
   const tap = await queryOnChainTap(walletAddress!);
 
   if (!tap) {
@@ -462,9 +628,7 @@ interface TapState {
 }
 
 function cvPrincipalHex(addr: string): string {
-  // Use serializeCV from @stacks/transactions to get the canonical bytes
-  const bytes = serializeCVBytes(principalCV(addr));
-  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  return bytesToHex(serializeCVBytes(principalCV(addr)));
 }
 
 function cvTupleHex(fields: Record<string, string>): string {
@@ -479,82 +643,88 @@ function cvTupleHex(fields: Record<string, string>): string {
   return h;
 }
 
-async function fetchBorrowFeeFromReservoir(borrowAmount: bigint, chainId: number): Promise<bigint> {
-  const [contractAddr, contractName] = RESERVOIR.split('.');
-  const argHex = '0x' + bytesToHex(serializeCVBytes(uintCV(borrowAmount)));
-  const sender = walletAddress ?? contractAddr;
+function parseUintCv(value: ClarityValue | undefined): bigint | null {
+  if (!value) return null;
+  if (value.type === ClarityType.UInt) return BigInt(value.value);
+  if (value.type === ClarityType.ResponseOk) return parseUintCv(value.value);
+  return null;
+}
 
-  const r = await fetch(
-    `${chainIdToHiroApi(chainId)}/v2/contracts/call-read/${contractAddr}/${contractName}/get-borrow-fee`,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ sender, arguments: [argHex] }),
-    },
-  );
-  if (!r.ok) {
-    throw new Error(`Failed to read borrow fee from reservoir (${r.status})`);
-  }
+function parsePipeResult(result: string): { balance1: bigint; balance2: bigint; nonce: bigint } | null {
+  if (!result) return null;
+  if (result === '0x09') return null; // (none)
 
-  const data = await r.json() as { okay?: boolean; result?: string };
-  if (!data.okay || typeof data.result !== 'string') {
-    throw new Error('Reservoir get-borrow-fee read-only call failed');
-  }
-
-  try {
-    if (data.result.startsWith('0x')) {
-      const cv = hexToCV(data.result);
-      const value = cvToValue(cv);
-      if (typeof value === 'bigint') return value;
-      if (typeof value === 'number' || typeof value === 'string') return BigInt(value);
+  if (result.startsWith('0x')) {
+    try {
+      let cv = hexToCV(result);
+      if (cv.type === ClarityType.ResponseOk) cv = cv.value;
+      if (cv.type === ClarityType.OptionalNone) return null;
+      if (cv.type === ClarityType.OptionalSome) cv = cv.value;
+      if (cv.type !== ClarityType.Tuple) return null;
+      const tuple = cv.value as Record<string, ClarityValue>;
+      const balance1 = parseUintCv(tuple['balance-1']);
+      const balance2 = parseUintCv(tuple['balance-2']);
+      const nonce = parseUintCv(tuple.nonce);
+      if (balance1 == null || balance2 == null || nonce == null) return null;
+      return { balance1, balance2, nonce };
+    } catch {
+      return null;
     }
-  } catch {
-    // Fall back to parsing repr-formatted responses.
   }
 
-  const reprMatch = data.result.match(/u(\d+)/);
-  if (reprMatch) return BigInt(reprMatch[1]);
-  throw new Error('Unexpected get-borrow-fee response format');
+  // Fallback for older/plain repr responses.
+  const b1m = result.match(/balance-1 u(\d+)/);
+  const b2m = result.match(/balance-2 u(\d+)/);
+  const ncm = result.match(/nonce u(\d+)/);
+  if (!b1m || !b2m || !ncm) return null;
+  return {
+    balance1: BigInt(b1m[1]),
+    balance2: BigInt(b2m[1]),
+    nonce: BigInt(ncm[1]),
+  };
 }
 
 async function queryOnChainTap(userAddr: string): Promise<TapState | null> {
   try {
-    const pipeKey = canonicalPipeKey(TOKEN, userAddr, RESERVOIR);
-    const tokenCV = cvPrincipalHex(TOKEN); // (some <TOKEN>)
-    const someByte = '0a'; // Clarity OptionalSome prefix
-    const argHex  = '0x' + cvTupleHex({
+    await ensureSupportedTokenLoaded();
+    const reservoir = getRuntimeReservoirContract();
+    const sfContract = getRuntimeSfContract();
+    const supportedToken = getRuntimeSupportedToken();
+    const pipeKey = canonicalPipeKey(supportedToken, userAddr, reservoir);
+    const legacyArgHex  = '0x' + cvTupleHex({
       'principal-1': cvPrincipalHex(pipeKey['principal-1']),
       'principal-2': cvPrincipalHex(pipeKey['principal-2']),
-      token: someByte + tokenCV,
+      token: optionalPrincipalCvHex(supportedToken),
     });
-    const [contractAddr, contractName] = SF_CONTRACT.split('.');
+    const tokenArgHex = '0x' + optionalPrincipalCvHex(supportedToken);
+    const withArgHex = '0x' + bytesToHex(serializeCVBytes(principalCV(reservoir)));
+    const [contractAddr, contractName] = sfContract.split('.');
     const chainId = (serverStatus.chainId as number | undefined) ?? CHAIN_ID;
-    const r = await fetch(
-      `${chainIdToHiroApi(chainId)}/v2/contracts/call-read/${contractAddr}/${contractName}/get-pipe`,
-      {
+    const endpoint = `${chainIdToHiroApi(chainId)}/v2/contracts/call-read/${contractAddr}/${contractName}/get-pipe`;
+    const callRead = async (argumentsHex: string[]): Promise<{ okay?: boolean; result?: string }> => {
+      const r = await fetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ sender: userAddr, arguments: [argHex] }),
-      },
-    );
-    if (!r.ok) return null;
-    const data = await r.json() as { okay: boolean; result?: string };
-    if (!data.okay || !data.result || data.result === '0x09') return null;
+        body: JSON.stringify({ sender: userAddr, arguments: argumentsHex }),
+      });
+      if (!r.ok) return {};
+      return await r.json() as { okay?: boolean; result?: string };
+    };
 
-    const repr = data.result;
-    const b1m  = repr.match(/balance-1 u(\d+)/);
-    const b2m  = repr.match(/balance-2 u(\d+)/);
-    const ncm  = repr.match(/nonce u(\d+)/);
-    if (!b1m) return null;
+    // Current StackFlow signature: get-pipe(token, with)
+    let data = await callRead([tokenArgHex, withArgHex]);
+    // Fallback for older deployments that expected a single pipe-key tuple argument.
+    if (!data.okay) data = await callRead([legacyArgHex]);
+    if (!data.okay || !data.result) return null;
 
-    const balance1 = BigInt(b1m[1]);
-    const balance2 = BigInt(b2m?.[1] ?? '0');
-    const nonce    = BigInt(ncm?.[1] ?? '0');
+    const parsed = parsePipeResult(data.result);
+    if (!parsed) return null;
+
     const userIsP1 = pipeKey['principal-1'] === userAddr;
     return {
-      userBalance:      userIsP1 ? balance1 : balance2,
-      reservoirBalance: userIsP1 ? balance2 : balance1,
-      nonce,
+      userBalance:      userIsP1 ? parsed.balance1 : parsed.balance2,
+      reservoirBalance: userIsP1 ? parsed.balance2 : parsed.balance1,
+      nonce: parsed.nonce,
       pipeKey,
     };
   } catch { return null; }
@@ -573,21 +743,25 @@ async function openMailbox(): Promise<void> {
 
   try {
     if (!walletAddress) throw new Error('Wallet not connected');
+    await ensureSupportedTokenAssetNameLoaded();
     const chainId = (serverStatus.chainId as number | undefined) ?? CHAIN_ID;
+    const sfContract = getRuntimeSfContract();
+    const reservoir = getRuntimeReservoirContract();
+    const supportedToken = getRuntimeSupportedToken();
+    const supportedTokenAssetName = supportedToken == null ? null : getRuntimeSupportedTokenAssetName();
+    if (!isContractPrincipal(reservoir)) {
+      throw new Error('Server reservoir principal is not configured');
+    }
+    if (supportedToken != null && !supportedTokenAssetName) {
+      throw new Error(`Could not resolve fungible token asset name for ${supportedToken}`);
+    }
     const setProgress = (msg: string): void => {
       errorEl.innerHTML = `<div class="alert alert-warning">${escHtml(msg)}</div>`;
     };
 
-    setProgress('Reading borrow fee from reservoir contract…');
-    const borrowFee = await withTimeout(
-      fetchBorrowFeeFromReservoir(OPEN_BORROW_AMOUNT, chainId),
-      20_000,
-      'Timed out while reading borrow fee from reservoir contract',
-    );
-
     // Borrower signs the post-borrow deposit state (action=2, hashed-secret=none).
     setProgress('Waiting for wallet signature (borrow params)… check your wallet popup/extension.');
-    const pipeKey = canonicalPipeKey(null, walletAddress, RESERVOIR);
+    const pipeKey = canonicalPipeKey(supportedToken, walletAddress, reservoir);
     const borrowStateCV = buildTransferCV({
       pipeKey,
       forPrincipal: walletAddress,
@@ -595,12 +769,12 @@ async function openMailbox(): Promise<void> {
       theirBalance: OPEN_BORROW_AMOUNT,
       nonce: OPEN_BORROW_NONCE,
       action: 2n,
-      actor: RESERVOIR,
+      actor: reservoir,
       hashedSecret: null,
       validAfter: null,
     });
     const mySignature = await withTimeout(
-      sip018SignWithWallet(SF_CONTRACT, borrowStateCV, chainId),
+      sip018SignWithWallet(sfContract, borrowStateCV, chainId),
       120_000,
       'Timed out waiting for wallet signature. Open your wallet extension and approve the SIP-018 request.',
     );
@@ -613,10 +787,10 @@ async function openMailbox(): Promise<void> {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           borrower: walletAddress,
+          token: supportedToken,
           tapAmount: OPEN_TAP_AMOUNT.toString(),
           tapNonce: OPEN_TAP_NONCE.toString(),
           borrowAmount: OPEN_BORROW_AMOUNT.toString(),
-          borrowFee: borrowFee.toString(),
           myBalance: OPEN_TAP_AMOUNT.toString(),
           reservoirBalance: OPEN_BORROW_AMOUNT.toString(),
           borrowNonce: OPEN_BORROW_NONCE.toString(),
@@ -633,18 +807,27 @@ async function openMailbox(): Promise<void> {
     const params = await paramsRes.json() as { reservoirSignature?: string; borrowFee?: string };
     const reservoirSignature = params.reservoirSignature;
     if (!reservoirSignature) throw new Error('Server did not return reservoir signature');
-    const finalBorrowFee = BigInt(params.borrowFee ?? borrowFee.toString());
+    if (!params.borrowFee) throw new Error('Server did not return borrow fee');
+    const finalBorrowFee = BigInt(params.borrowFee);
+    const tokenContractId = supportedToken as `${string}.${string}` | null;
+    const postConditions = supportedToken == null ? [
+      Pc.principal(walletAddress!).willSendEq(OPEN_TAP_AMOUNT + finalBorrowFee).ustx(),
+      Pc.principal(reservoir).willSendEq(OPEN_BORROW_AMOUNT).ustx(),
+    ] : [
+      Pc.principal(walletAddress!).willSendEq(OPEN_TAP_AMOUNT + finalBorrowFee).ft(tokenContractId!, supportedTokenAssetName!),
+      Pc.principal(reservoir).willSendEq(OPEN_BORROW_AMOUNT).ft(tokenContractId!, supportedTokenAssetName!),
+    ];
 
     setProgress('Waiting for wallet transaction confirmation…');
     const txId = await withTimeout(
       new Promise<string>((resolve, reject) => {
         openContractCall({
-          contractAddress: RESERVOIR.split('.')[0],
-          contractName:    RESERVOIR.split('.')[1],
+          contractAddress: reservoir.split('.')[0],
+          contractName:    reservoir.split('.')[1],
           functionName:    'create-tap-with-borrowed-liquidity',
           functionArgs: [
-            principalCV(SF_CONTRACT),
-            noneCV(),
+            principalCV(sfContract),
+            supportedToken == null ? noneCV() : someCV(principalCV(supportedToken)),
             uintCV(OPEN_TAP_AMOUNT),
             uintCV(OPEN_TAP_NONCE),
             uintCV(OPEN_BORROW_AMOUNT),
@@ -657,10 +840,7 @@ async function openMailbox(): Promise<void> {
           ],
           network:         chainIdToNetworkName(chainId),
           postConditionMode: PostConditionMode.Deny,
-          postConditions: [
-            Pc.principal(walletAddress!).willSendEq(OPEN_TAP_AMOUNT + finalBorrowFee).ustx(),
-            Pc.principal(RESERVOIR).willSendEq(OPEN_BORROW_AMOUNT).ustx(),
-          ],
+          postConditions,
           appDetails: { name: 'Stackmail', icon: window.location.origin + '/favicon.ico' },
           onFinish:  (data: { txId?: string; txid?: string; tx_id?: string }) =>
             resolve(data.txId ?? data.txid ?? data.tx_id ?? ''),
@@ -680,8 +860,11 @@ async function openMailbox(): Promise<void> {
     setAppState('tx-pending');
 
   } catch (e) {
-    const msg = typeof e === 'string' ? e : ((e as Error)?.message || (e as { reason?: string })?.reason || JSON.stringify(e) || 'Unknown error');
-    errorEl.innerHTML = `<div class="alert alert-error">${escHtml(msg)}</div>`;
+    const rawMsg = typeof e === 'string' ? e : ((e as Error)?.message || (e as { reason?: string })?.reason || JSON.stringify(e) || 'Unknown error');
+    const msg = /Post-condition check failure.*SentEq 0/i.test(rawMsg)
+      ? `${rawMsg}\n\nLikely cause: the reservoir signer is not registered as a StackFlow agent. In Status -> Reservoir Admin, call set-agent with the signer address.`
+      : rawMsg;
+    errorEl.innerHTML = `<div class="alert alert-error">${escHtml(msg).replace(/\n/g, '<br>')}</div>`;
     btn.disabled = false;
     btn.innerHTML = 'Open Mailbox';
   }
@@ -855,6 +1038,7 @@ async function fetchRecipientInfo(toAddr: string): Promise<void> {
   };
 
   try {
+    await ensureSupportedTokenLoaded();
     const recipientPublicKey = await lookupRecipientPubkey(toAddr);
     if (!recipientPublicKey) {
       resetErr('No transaction history found — recipient must have sent at least one Stacks transaction to receive mail.');
@@ -912,9 +1096,12 @@ async function sendMessage(): Promise<void> {
   statusEl.innerHTML = '';
 
   try {
+    await ensureSupportedTokenLoaded();
     const chainId    = (serverStatus.chainId as number | undefined) ?? CHAIN_ID;
+    const sfContract = getRuntimeSfContract();
     const serverAddr = recipientInfo.serverAddress;
     const senderAddr = walletAddress!;
+    const supportedToken = getRuntimeSupportedToken();
 
     // Random secret + hash
     const secretBytes     = crypto.getRandomValues(new Uint8Array(32));
@@ -933,8 +1120,8 @@ async function sendMessage(): Promise<void> {
     const newMyBalance     = pipeState.myBalance - price;
     const newNonce         = pipeState.nonce + 1n;
 
-    // Build canonical pipe key (sender ↔ server, sm-test-token)
-    const pipeKey = canonicalPipeKey(TOKEN, senderAddr, serverAddr);
+    // Build canonical pipe key (sender ↔ server, token follows reservoir supported-token)
+    const pipeKey = canonicalPipeKey(supportedToken, senderAddr, serverAddr);
 
     // Build SIP-018 transfer CV
     const transferCV = buildTransferCV({
@@ -950,11 +1137,11 @@ async function sendMessage(): Promise<void> {
     });
 
     // Sign with wallet
-    const sig = await sip018SignWithWallet(SF_CONTRACT, transferCV, chainId);
+    const sig = await sip018SignWithWallet(sfContract, transferCV, chainId);
 
     // Build proof object
     const proof = {
-      contractId:    SF_CONTRACT,
+      contractId:    sfContract,
       pipeKey,
       forPrincipal:  serverAddr,
       withPrincipal: senderAddr,
@@ -1012,6 +1199,23 @@ async function loadStatus(): Promise<void> {
   try {
     const r    = await apiFetch('/status');
     const data = await r.json() as Record<string, unknown>;
+    try {
+      const reservoir = (
+        typeof data.reservoirContract === 'string' && isContractPrincipal(data.reservoirContract)
+          ? data.reservoirContract
+          : (typeof data.serverAddress === 'string' && isContractPrincipal(data.serverAddress) ? data.serverAddress : RESERVOIR)
+      );
+      const chainId = typeof data.chainId === 'number' ? data.chainId : CHAIN_ID;
+      const supportedToken = await fetchReservoirSupportedToken(reservoir, chainId);
+      data.supportedToken = supportedToken;
+      if (supportedToken == null) {
+        data.supportedTokenAssetName = null;
+      } else {
+        data.supportedTokenAssetName = await fetchFungibleTokenName(supportedToken, chainId);
+      }
+    } catch {
+      // Keep status usable even if token lookup temporarily fails.
+    }
     serverStatus = data;
     dot.className    = data.ok ? 'dot green' : 'dot red';
     label.textContent = data.ok ? 'Stackmail Server — Online' : 'Server returned error';
@@ -1021,6 +1225,13 @@ async function loadStatus(): Promise<void> {
       ? `${Number(data.messagePriceSats).toLocaleString()} sats` : '—';
     (document.getElementById('s-network') as HTMLElement).textContent  = data.network
       ? String(data.network).charAt(0).toUpperCase() + String(data.network).slice(1) : '—';
+    const adminAgentInput = document.getElementById('admin-agent-input') as HTMLInputElement | null;
+    if (adminAgentInput && !adminAgentInput.value.trim()) {
+      const candidate = typeof data.signerAddress === 'string'
+        ? data.signerAddress.trim()
+        : (typeof data.serverAddress === 'string' ? data.serverAddress.trim() : '');
+      if (candidate) adminAgentInput.value = candidate;
+    }
   } catch {
     dot.className    = 'dot red';
     label.textContent = 'Cannot reach server';
@@ -1078,12 +1289,14 @@ async function setBorrowRate(): Promise<void> {
   statusEl.innerHTML = '';
 
   try {
+    await ensureServerStatusLoaded();
     const chainId = (serverStatus.chainId as number | undefined) ?? CHAIN_ID;
+    const reservoir = getRuntimeReservoirContract();
     const txId = await withTimeout(
       new Promise<string>((resolve, reject) => {
         openContractCall({
-          contractAddress: RESERVOIR.split('.')[0],
-          contractName: RESERVOIR.split('.')[1],
+          contractAddress: reservoir.split('.')[0],
+          contractName: reservoir.split('.')[1],
           functionName: 'set-borrow-rate',
           functionArgs: [uintCV(rate)],
           network: chainIdToNetworkName(chainId),
@@ -1113,6 +1326,68 @@ async function setBorrowRate(): Promise<void> {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Set Borrow Rate';
+  }
+}
+
+async function setReservoirAgent(): Promise<void> {
+  const input = document.getElementById('admin-agent-input') as HTMLInputElement;
+  const btn = document.getElementById('admin-set-agent-btn') as HTMLButtonElement;
+  const statusEl = document.getElementById('admin-agent-status') as HTMLElement;
+
+  if (!walletAddress) {
+    statusEl.innerHTML = '<div class="alert alert-warning">Connect wallet first.</div>';
+    return;
+  }
+
+  const agent = input.value.trim();
+  if (!/^S[PT][0-9A-Z]{39}$/.test(agent)) {
+    statusEl.innerHTML = '<div class="alert alert-warning">Enter a valid standard STX address for the agent.</div>';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Submitting…';
+  statusEl.innerHTML = '';
+
+  try {
+    await ensureServerStatusLoaded();
+    const chainId = (serverStatus.chainId as number | undefined) ?? CHAIN_ID;
+    const reservoir = getRuntimeReservoirContract();
+    const sfContract = getRuntimeSfContract();
+    const txId = await withTimeout(
+      new Promise<string>((resolve, reject) => {
+        openContractCall({
+          contractAddress: reservoir.split('.')[0],
+          contractName: reservoir.split('.')[1],
+          functionName: 'set-agent',
+          functionArgs: [principalCV(sfContract), principalCV(agent)],
+          network: chainIdToNetworkName(chainId),
+          postConditionMode: PostConditionMode.Allow,
+          appDetails: { name: 'Stackmail', icon: window.location.origin + '/favicon.ico' },
+          onFinish: (data: { txId?: string; txid?: string; tx_id?: string }) =>
+            resolve(data.txId ?? data.txid ?? data.tx_id ?? ''),
+          onCancel: () => reject(new Error('Transaction cancelled')),
+        });
+      }),
+      180_000,
+      'Timed out waiting for wallet transaction approval',
+    );
+
+    if (!txId) throw new Error('No transaction ID returned from wallet');
+    const chain = chainId === 1 ? 'mainnet' : 'testnet';
+    statusEl.innerHTML = `
+      <div class="alert alert-success">
+        Reservoir agent update submitted.<br>
+        <a href="https://explorer.hiro.so/txid/${txId}?chain=${chain}" target="_blank" rel="noopener" class="mono" style="color:inherit">
+          ${escHtml(txId)}
+        </a>
+      </div>`;
+  } catch (e) {
+    const msg = typeof e === 'string' ? e : ((e as Error)?.message || (e as { reason?: string })?.reason || JSON.stringify(e) || 'Unknown error');
+    statusEl.innerHTML = `<div class="alert alert-error">${escHtml(msg)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Set Reservoir Agent';
   }
 }
 
@@ -1165,6 +1440,7 @@ document.querySelectorAll<HTMLButtonElement>('.tab-btn').forEach(btn => {
 document.getElementById('refresh-inbox-btn')!.addEventListener('click', loadInbox);
 document.getElementById('show-claimed-cb')!.addEventListener('change', loadInbox);
 document.getElementById('send-btn')!.addEventListener('click', sendMessage);
+document.getElementById('admin-set-agent-btn')!.addEventListener('click', setReservoirAgent);
 document.getElementById('admin-set-rate-btn')!.addEventListener('click', setBorrowRate);
 
 document.getElementById('copy-inbox-addr-btn')!.addEventListener('click', () => {
