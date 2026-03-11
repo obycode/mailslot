@@ -101,11 +101,14 @@ export interface Config {
   authTimestampTtlMs: number;
   /** @deprecated kept for payment-info response compatibility */
   stackflowNodeUrl: string;
+  /** Standard principal used to verify server signatures (derived from private key by default) */
   serverStxAddress: string;
   /** Hex private key used by the reservoir to sign outgoing state updates */
   serverPrivateKey: string;
   /** StackFlow contract ID this server operates (e.g. SP...stackflow-sbtc-0-6-0) */
   sfContractId: string;
+  /** Reservoir contract principal (e.g. SP....sm-reservoir) for tap onboarding */
+  reservoirContractId: string;
   /** Stacks chain ID: 1 = mainnet, 2147483648 = testnet/devnet */
   chainId: number;
   messagePriceSats: string;
@@ -129,6 +132,7 @@ export function loadConfig(): Config {
     serverStxAddress: process.env.STACKMAIL_SERVER_STX_ADDRESS ?? '',
     serverPrivateKey: process.env.STACKMAIL_SERVER_PRIVATE_KEY ?? '',
     sfContractId: process.env.STACKMAIL_SF_CONTRACT_ID ?? '',
+    reservoirContractId: process.env.STACKMAIL_RESERVOIR_CONTRACT_ID ?? '',
     chainId,
     messagePriceSats: process.env.STACKMAIL_MESSAGE_PRICE_SATS ?? '1000',
     minFeeSats: process.env.STACKMAIL_MIN_FEE_SATS ?? '100',

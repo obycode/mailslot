@@ -25,10 +25,24 @@ export interface IPaymentService {
     recipientAddr: string;
     contractId: string;
   }): Promise<PendingPayment | null>;
-  settlePayment(args: { paymentId: string; secret: string; hashedSecret: string }): Promise<void>;
+  createTapWithBorrowedLiquidityParams(args: {
+    borrower: string;
+    token: string | null;
+    tapAmount: string;
+    tapNonce: string;
+    borrowAmount: string;
+    borrowFee?: string;
+    myBalance: string;
+    reservoirBalance: string;
+    borrowNonce: string;
+    mySignature: string;
+  }): Promise<{
+    borrowFee: string;
+    reservoirSignature: string;
+  }>;
 }
 import { verifyInboxAuth, AuthError, AUTH_DOMAIN } from './auth.js';
-import { hashSecret, verifySecretHash } from '@stackmail/crypto';
+import { verifySecretHash } from '@stackmail/crypto';
 
 export function createMailServer(
   config: Config,
@@ -36,6 +50,7 @@ export function createMailServer(
   paymentService: IPaymentService,
 ): ReturnType<typeof createServer> {
   const sfContractId = config.sfContractId;
+  const pipeCounterparty = config.reservoirContractId || config.serverStxAddress;
   const __filename = fileURLToPath(import.meta.url);
   const WEB_DIR = join(dirname(__filename), '..', 'web');
   const WEB_DIR_RESOLVED = resolve(WEB_DIR);
@@ -50,7 +65,7 @@ export function createMailServer(
         accepts: [{ mode: 'direct', scheme: 'stackflow' }],
         amount: config.messagePriceSats,
         stackflowNodeUrl: config.stackflowNodeUrl,
-        serverAddress: config.serverStxAddress,
+        serverAddress: pipeCounterparty,
       });
     }
 
@@ -82,6 +97,12 @@ export function createMailServer(
 
     if (!data.from || typeof data.from !== 'string') {
       return json(res, 400, { error: 'from-required', message: 'sender STX address required in body.from' });
+    }
+    if (data.from !== verified.senderAddress) {
+      return json(res, 400, {
+        error: 'sender-mismatch',
+        message: 'body.from must match the sender authenticated by the payment proof',
+      });
     }
 
     if (!data.encryptedPayload || typeof data.encryptedPayload !== 'object') {
@@ -121,7 +142,7 @@ export function createMailServer(
     const msgId = randomUUID();
     await store.saveMessage({
       id: msgId,
-      from: data.from,
+      from: verified.senderAddress,
       to,
       sentAt: Date.now(),
       amount: verified.incomingAmount,
@@ -138,7 +159,7 @@ export function createMailServer(
   }
 
   async function handleGetInbox(req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
-    const auth = await requireAuth(req, res);
+    const auth = await requireAuth(req, res, { action: 'get-inbox' });
     if (!auth) return;
 
     const limit = parseInt(url.searchParams.get('limit') ?? '50', 10);
@@ -150,7 +171,7 @@ export function createMailServer(
   }
 
   async function handlePreview(req: IncomingMessage, res: ServerResponse, msgId: string): Promise<void> {
-    const auth = await requireAuth(req, res);
+    const auth = await requireAuth(req, res, { action: 'get-message', messageId: msgId });
     if (!auth) return;
 
     const stored = await store.getMessage(msgId, auth.payload.address);
@@ -169,7 +190,7 @@ export function createMailServer(
   }
 
   async function handleGetMessage(req: IncomingMessage, res: ServerResponse, msgId: string): Promise<void> {
-    const auth = await requireAuth(req, res);
+    const auth = await requireAuth(req, res, { action: 'get-message', messageId: msgId });
     if (!auth) return;
 
     const msg = await store.getClaimedMessage(msgId, auth.payload.address);
@@ -178,7 +199,7 @@ export function createMailServer(
   }
 
   async function handleClaim(req: IncomingMessage, res: ServerResponse, msgId: string): Promise<void> {
-    const auth = await requireAuth(req, res);
+    const auth = await requireAuth(req, res, { action: 'claim-message', messageId: msgId });
     if (!auth) return;
 
     let body: string;
@@ -217,18 +238,82 @@ export function createMailServer(
       throw err;
     }
 
-    paymentService.settlePayment({
-      paymentId: stored.paymentId,
-      secret: data.secret,
-      hashedSecret: stored.hashedSecret,
-    }).then(() => store.markPaymentSettled(stored.paymentId)).catch(err => {
-      console.error('payment settlement error', stored.paymentId, err);
-    });
+    await store.markPaymentSettled(stored.paymentId);
 
     return json(res, 200, {
       message,
       pendingPayment: stored.pendingPayment,
     });
+  }
+
+  async function handleTapBorrowParams(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    if (!sfContractId) {
+      return json(res, 503, { error: 'stackflow-contract-missing' });
+    }
+
+    let body: string;
+    try {
+      body = await readBody(req, 4096);
+    } catch {
+      return json(res, 413, { error: 'body-too-large' });
+    }
+
+    let data: Record<string, unknown>;
+    try {
+      data = JSON.parse(body) as Record<string, unknown>;
+    } catch {
+      return json(res, 400, { error: 'invalid-json' });
+    }
+
+    const borrower = typeof data['borrower'] === 'string' ? data['borrower'] : '';
+    const tokenRaw = data['token'];
+    const token = typeof tokenRaw === 'string' ? tokenRaw.trim() : (tokenRaw == null ? null : '__invalid__');
+    const tapAmount = String(data['tapAmount'] ?? '');
+    const tapNonce = String(data['tapNonce'] ?? '');
+    const borrowAmount = String(data['borrowAmount'] ?? '');
+    const borrowFeeRaw = data['borrowFee'];
+    const borrowFee = typeof borrowFeeRaw === 'string' ? borrowFeeRaw.trim() : '';
+    const myBalance = String(data['myBalance'] ?? '');
+    const reservoirBalance = String(data['reservoirBalance'] ?? '');
+    const borrowNonce = String(data['borrowNonce'] ?? '');
+    const mySignature = typeof data['mySignature'] === 'string' ? data['mySignature'] : '';
+
+    if (token === '__invalid__' || !borrower || !tapAmount || !tapNonce || !borrowAmount || !myBalance || !reservoirBalance || !borrowNonce || !mySignature) {
+      return json(res, 400, { error: 'invalid-params', message: 'missing required borrow params' });
+    }
+
+    try {
+      const signed = await paymentService.createTapWithBorrowedLiquidityParams({
+        borrower,
+        token: token || null,
+        tapAmount,
+        tapNonce,
+        borrowAmount,
+        borrowFee: borrowFee || undefined,
+        myBalance,
+        reservoirBalance,
+        borrowNonce,
+        mySignature,
+      });
+      return json(res, 200, {
+        ok: true,
+        stackflowContractId: sfContractId,
+        token: token || null,
+        tapAmount,
+        tapNonce,
+        borrowAmount,
+        borrowFee: signed.borrowFee,
+        myBalance,
+        reservoirBalance,
+        borrowNonce,
+        reservoirSignature: signed.reservoirSignature,
+      });
+    } catch (err) {
+      if (err instanceof PaymentError) {
+        return json(res, err.statusCode, { error: err.reason, message: err.message });
+      }
+      throw err;
+    }
   }
 
   // ─── Request router ─────────────────────────────────────────────────────────
@@ -253,7 +338,9 @@ export function createMailServer(
     if (method === 'GET' && path === '/status') {
       return json(res, 200, {
         ok: true,
-        serverAddress: config.serverStxAddress,
+        serverAddress: pipeCounterparty,
+        signerAddress: config.serverStxAddress,
+        reservoirContract: config.reservoirContractId,
         sfContract: config.sfContractId,
         messagePriceSats: config.messagePriceSats,
         minFeeSats: config.minFeeSats,
@@ -274,7 +361,7 @@ export function createMailServer(
         if (!resolvedPath.startsWith(WEB_DIR_RESOLVED + '/') && resolvedPath !== WEB_DIR_RESOLVED) {
           return json(res, 403, { error: 'forbidden' });
         }
-        const data = await readFile(filePath);
+        const data = await readFile(resolvedPath);
         const ct = filePath.endsWith('.html') ? 'text/html; charset=utf-8'
                  : filePath.endsWith('.js') || filePath.endsWith('.mjs') ? 'application/javascript'
                  : filePath.endsWith('.css') ? 'text/css'
@@ -313,6 +400,10 @@ export function createMailServer(
       return handleClaim(req, res, decodeURIComponent(claimMatch[1]));
     }
 
+    if (method === 'POST' && path === '/tap/borrow-params') {
+      return handleTapBorrowParams(req, res);
+    }
+
     return json(res, 404, { error: 'not-found' });
   }
 
@@ -321,6 +412,7 @@ export function createMailServer(
   async function requireAuth(
     req: IncomingMessage,
     res: ServerResponse,
+    expected: { action: 'get-inbox' | 'claim-message' | 'get-message'; messageId?: string },
   ): Promise<Awaited<ReturnType<typeof verifyInboxAuth>> | null> {
     const authHeader = req.headers['x-stackmail-auth'];
     if (!authHeader) {
@@ -329,11 +421,20 @@ export function createMailServer(
     }
 
     try {
-      return await verifyInboxAuth(
+      const auth = await verifyInboxAuth(
         Array.isArray(authHeader) ? authHeader[0] : authHeader,
         config,
         store,
       );
+      if (auth.payload.action !== expected.action) {
+        json(res, 403, { error: 'auth-action-mismatch', message: `expected action ${expected.action}` });
+        return null;
+      }
+      if (expected.messageId != null && auth.payload.messageId !== expected.messageId) {
+        json(res, 403, { error: 'auth-message-id-mismatch', message: 'messageId in auth payload does not match route' });
+        return null;
+      }
+      return auth;
     } catch (err) {
       if (err instanceof AuthError) {
         json(res, err.statusCode, { error: err.reason, message: err.message });
@@ -343,12 +444,13 @@ export function createMailServer(
     }
   }
 
-  return createServer((req, res) => {
+  const server = createServer((req, res) => {
     handleRequest(req, res).catch(err => {
       console.error('unhandled error', err);
       json(res, 500, { error: 'internal-error' });
     });
   });
+  return server;
 }
 
 function json(res: ServerResponse, status: number, body: unknown): void {

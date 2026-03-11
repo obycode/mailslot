@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "echo 'no tests'"
+    "test": "echo 'no tests'",
+    "lint": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@noble/curves": "^1.4.0",

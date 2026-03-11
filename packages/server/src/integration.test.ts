@@ -42,7 +42,20 @@ class MockPaymentService implements IPaymentService {
     return null;
   }
 
-  async settlePayment(): Promise<void> { /* no-op */ }
+  async createTapWithBorrowedLiquidityParams(_: {
+    borrower: string;
+    token: string | null;
+    tapAmount: string;
+    tapNonce: string;
+    borrowAmount: string;
+    borrowFee?: string;
+    myBalance: string;
+    reservoirBalance: string;
+    borrowNonce: string;
+    mySignature: string;
+  }): Promise<{ borrowFee: string; reservoirSignature: string }> {
+    return { borrowFee: '0', reservoirSignature: '0x' + '00'.repeat(65) };
+  }
 }
 
 // ─── Test keypair helpers ─────────────────────────────────────────────────────
@@ -105,7 +118,8 @@ const serverConfig: Config = {
   stackflowNodeUrl: '',
   serverStxAddress: 'SP_SERVER',
   serverPrivateKey: '',
-  sfContractId: '',
+  sfContractId: 'SP3QFYVTMS0PRJT3K3GMDW9DGR33TDHENSDWVNQMR.sm-stackflow',
+  reservoirContractId: 'SP3QFYVTMS0PRJT3K3GMDW9DGR33TDHENSDWVNQMR.sm-reservoir',
   chainId: 1,
   messagePriceSats: '1000',
   minFeeSats: '100',
@@ -223,8 +237,9 @@ describe('full send → inbox → preview → claim flow', () => {
   it('step 4: GET /inbox/:id/preview returns encrypted payload', async () => {
     const authHeader = buildAuthHeader({
       pubkey: recipientSignKeypair.compressedPubkeyHex,
-      action: 'get-inbox',
+      action: 'get-message',
       address: recipientAddress,
+      messageId,
       privateKey: recipientSignKeypair.privateKey,
     });
 
@@ -265,8 +280,9 @@ describe('full send → inbox → preview → claim flow', () => {
   it('step 6: full preview → decrypt → claim round-trip succeeds', async () => {
     const previewAuth = buildAuthHeader({
       pubkey: recipientSignKeypair.compressedPubkeyHex,
-      action: 'get-inbox',
+      action: 'get-message',
       address: recipientAddress,
+      messageId,
       privateKey: recipientSignKeypair.privateKey,
     });
     const previewRes = await fetch(`${baseUrl}/inbox/${messageId}/preview`, {
@@ -308,11 +324,16 @@ describe('full send → inbox → preview → claim flow', () => {
       messageId,
       privateKey: recipientSignKeypair.privateKey,
     });
-    const previewRes = await fetch(`${baseUrl}/inbox/${messageId}/preview`, {
-      headers: { 'x-stackmail-auth': authHeader },
+    const claimRes = await fetch(`${baseUrl}/inbox/${messageId}/claim`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-stackmail-auth': authHeader,
+      },
+      body: JSON.stringify({ secret: randomBytes(32).toString('hex') }),
     });
-    expect(previewRes.status).toBe(409);
-    const body = await previewRes.json() as { error: string };
+    expect(claimRes.status).toBe(409);
+    const body = await claimRes.json() as { error: string };
     expect(body.error).toBe('already-claimed');
   });
 });
@@ -328,6 +349,152 @@ describe('auth error cases', () => {
       headers: { 'x-stackmail-auth': 'not-valid-base64-json' },
     });
     expect(res.status).toBe(401);
+  });
+
+  it('GET /inbox with wrong auth action returns 403', async () => {
+    const authHeader = buildAuthHeader({
+      pubkey: recipientSignKeypair.compressedPubkeyHex,
+      action: 'claim-message',
+      address: recipientAddress,
+      privateKey: recipientSignKeypair.privateKey,
+    });
+    const res = await fetch(`${baseUrl}/inbox`, {
+      headers: { 'x-stackmail-auth': authHeader },
+    });
+    expect(res.status).toBe(403);
+    const body = await res.json() as { error: string };
+    expect(body.error).toBe('auth-action-mismatch');
+  });
+});
+
+describe('tap borrow params endpoint', () => {
+  it('returns 400 for missing params', async () => {
+    const res = await fetch(`${baseUrl}/tap/borrow-params`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ borrower: recipientAddress }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toBe('invalid-params');
+  });
+
+  it('returns signed params for valid input', async () => {
+    const res = await fetch(`${baseUrl}/tap/borrow-params`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        borrower: recipientAddress,
+        tapAmount: '1000',
+        tapNonce: '0',
+        borrowAmount: '1000',
+        borrowFee: '100',
+        myBalance: '1000',
+        reservoirBalance: '1000',
+        borrowNonce: '1',
+        mySignature: '0x' + '11'.repeat(65),
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json() as { ok: boolean; reservoirSignature?: string };
+    expect(body.ok).toBe(true);
+    expect(typeof body.reservoirSignature).toBe('string');
+  });
+});
+
+describe('sender identity binding', () => {
+  it('rejects send when body.from does not match payment sender identity', async () => {
+    const secretHex = randomBytes(32).toString('hex');
+    const hashedSecretHex = hashSecret(secretHex);
+    const encryptedPayload = encryptMail(
+      { v: 1, secret: secretHex, subject: 'Integration test', body: 'Spoofed sender attempt' },
+      recipientEncryptPubkeyHex,
+    );
+
+    const realSender = pubkeyToStxAddress(senderPubkeyHex);
+    const spoofedSender = recipientAddress;
+    const proof = JSON.stringify({
+      hashedSecret: hashedSecretHex,
+      forPrincipal: realSender,
+      amount: '1000',
+    });
+
+    const res = await fetch(`${baseUrl}/messages/${recipientAddress}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-x402-payment': proof,
+      },
+      body: JSON.stringify({
+        from: spoofedSender,
+        encryptedPayload,
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toBe('sender-mismatch');
+  });
+});
+
+describe('claim finalization', () => {
+  it('marks payment as settled when claim succeeds', async () => {
+    const finalizeStore = new SqliteMessageStore(':memory:');
+    await finalizeStore.init();
+    const finalizeService = new MockPaymentService();
+    const finalizeServer = createMailServer(serverConfig, finalizeStore, finalizeService);
+    await new Promise<void>(r => finalizeServer.listen(0, '127.0.0.1', () => r()));
+    const finalizeUrl = `http://127.0.0.1:${(finalizeServer.address() as AddressInfo).port}`;
+
+    const secretHex = randomBytes(32).toString('hex');
+    const hashedSecretHex = hashSecret(secretHex);
+    const encryptedPayload = encryptMail(
+      { v: 1, secret: secretHex, subject: 'Finalize test', body: 'mark settled on claim' },
+      recipientEncryptPubkeyHex,
+    );
+    const senderAddress = pubkeyToStxAddress(senderPubkeyHex);
+    const proof = JSON.stringify({
+      hashedSecret: hashedSecretHex,
+      forPrincipal: senderAddress,
+      amount: '1000',
+    });
+
+    const sendRes = await fetch(`${finalizeUrl}/messages/${recipientAddress}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-x402-payment': proof,
+      },
+      body: JSON.stringify({
+        from: senderAddress,
+        encryptedPayload,
+      }),
+    });
+    expect(sendRes.status).toBe(200);
+    const sendBody = await sendRes.json() as { messageId: string };
+    const messageId = sendBody.messageId;
+
+    const claimAuth = buildAuthHeader({
+      pubkey: recipientSignKeypair.compressedPubkeyHex,
+      action: 'claim-message',
+      address: recipientAddress,
+      messageId,
+      privateKey: recipientSignKeypair.privateKey,
+    });
+    const claimRes = await fetch(`${finalizeUrl}/inbox/${messageId}/claim`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-stackmail-auth': claimAuth,
+      },
+      body: JSON.stringify({ secret: secretHex }),
+    });
+    expect(claimRes.status).toBe(200);
+
+    const stored = await finalizeStore.getMessage(messageId, recipientAddress);
+    expect(stored?.paymentSettled).toBe(true);
+
+    await new Promise<void>((r, j) => finalizeServer.close(e => e ? j(e) : r()));
   });
 });
 
