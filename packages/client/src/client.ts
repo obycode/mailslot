@@ -222,7 +222,7 @@ export class StackmailClient {
    */
   private async fetchEncryptedPayload(messageId: string): Promise<import('@stackmail/crypto').EncryptedMail> {
     const res = await fetch(`${this.config.serverUrl}/inbox/${encodeURIComponent(messageId)}/preview`, {
-      headers: { 'x-stackmail-auth': await this.buildAuthHeader('get-inbox') },
+      headers: { 'x-stackmail-auth': await this.buildAuthHeader('get-message', messageId) },
       signal: AbortSignal.timeout(15_000),
     });
 

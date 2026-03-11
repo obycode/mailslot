@@ -223,8 +223,9 @@ describe('full send → inbox → preview → claim flow', () => {
   it('step 4: GET /inbox/:id/preview returns encrypted payload', async () => {
     const authHeader = buildAuthHeader({
       pubkey: recipientSignKeypair.compressedPubkeyHex,
-      action: 'get-inbox',
+      action: 'get-message',
       address: recipientAddress,
+      messageId,
       privateKey: recipientSignKeypair.privateKey,
     });
 
@@ -265,8 +266,9 @@ describe('full send → inbox → preview → claim flow', () => {
   it('step 6: full preview → decrypt → claim round-trip succeeds', async () => {
     const previewAuth = buildAuthHeader({
       pubkey: recipientSignKeypair.compressedPubkeyHex,
-      action: 'get-inbox',
+      action: 'get-message',
       address: recipientAddress,
+      messageId,
       privateKey: recipientSignKeypair.privateKey,
     });
     const previewRes = await fetch(`${baseUrl}/inbox/${messageId}/preview`, {
@@ -308,11 +310,16 @@ describe('full send → inbox → preview → claim flow', () => {
       messageId,
       privateKey: recipientSignKeypair.privateKey,
     });
-    const previewRes = await fetch(`${baseUrl}/inbox/${messageId}/preview`, {
-      headers: { 'x-stackmail-auth': authHeader },
+    const claimRes = await fetch(`${baseUrl}/inbox/${messageId}/claim`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-stackmail-auth': authHeader,
+      },
+      body: JSON.stringify({ secret: randomBytes(32).toString('hex') }),
     });
-    expect(previewRes.status).toBe(409);
-    const body = await previewRes.json() as { error: string };
+    expect(claimRes.status).toBe(409);
+    const body = await claimRes.json() as { error: string };
     expect(body.error).toBe('already-claimed');
   });
 });
@@ -328,6 +335,56 @@ describe('auth error cases', () => {
       headers: { 'x-stackmail-auth': 'not-valid-base64-json' },
     });
     expect(res.status).toBe(401);
+  });
+
+  it('GET /inbox with wrong auth action returns 403', async () => {
+    const authHeader = buildAuthHeader({
+      pubkey: recipientSignKeypair.compressedPubkeyHex,
+      action: 'claim-message',
+      address: recipientAddress,
+      privateKey: recipientSignKeypair.privateKey,
+    });
+    const res = await fetch(`${baseUrl}/inbox`, {
+      headers: { 'x-stackmail-auth': authHeader },
+    });
+    expect(res.status).toBe(403);
+    const body = await res.json() as { error: string };
+    expect(body.error).toBe('auth-action-mismatch');
+  });
+});
+
+describe('sender identity binding', () => {
+  it('rejects send when body.from does not match payment sender identity', async () => {
+    const secretHex = randomBytes(32).toString('hex');
+    const hashedSecretHex = hashSecret(secretHex);
+    const encryptedPayload = encryptMail(
+      { v: 1, secret: secretHex, subject: 'Integration test', body: 'Spoofed sender attempt' },
+      recipientEncryptPubkeyHex,
+    );
+
+    const realSender = pubkeyToStxAddress(senderPubkeyHex);
+    const spoofedSender = recipientAddress;
+    const proof = JSON.stringify({
+      hashedSecret: hashedSecretHex,
+      forPrincipal: realSender,
+      amount: '1000',
+    });
+
+    const res = await fetch(`${baseUrl}/messages/${recipientAddress}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-x402-payment': proof,
+      },
+      body: JSON.stringify({
+        from: spoofedSender,
+        encryptedPayload,
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toBe('sender-mismatch');
   });
 });
 

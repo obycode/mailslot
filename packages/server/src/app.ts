@@ -83,6 +83,12 @@ export function createMailServer(
     if (!data.from || typeof data.from !== 'string') {
       return json(res, 400, { error: 'from-required', message: 'sender STX address required in body.from' });
     }
+    if (data.from !== verified.senderAddress) {
+      return json(res, 400, {
+        error: 'sender-mismatch',
+        message: 'body.from must match the sender authenticated by the payment proof',
+      });
+    }
 
     if (!data.encryptedPayload || typeof data.encryptedPayload !== 'object') {
       return json(res, 400, { error: 'encrypted-payload-required' });
@@ -121,7 +127,7 @@ export function createMailServer(
     const msgId = randomUUID();
     await store.saveMessage({
       id: msgId,
-      from: data.from,
+      from: verified.senderAddress,
       to,
       sentAt: Date.now(),
       amount: verified.incomingAmount,
@@ -138,7 +144,7 @@ export function createMailServer(
   }
 
   async function handleGetInbox(req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
-    const auth = await requireAuth(req, res);
+    const auth = await requireAuth(req, res, { action: 'get-inbox' });
     if (!auth) return;
 
     const limit = parseInt(url.searchParams.get('limit') ?? '50', 10);
@@ -150,7 +156,7 @@ export function createMailServer(
   }
 
   async function handlePreview(req: IncomingMessage, res: ServerResponse, msgId: string): Promise<void> {
-    const auth = await requireAuth(req, res);
+    const auth = await requireAuth(req, res, { action: 'get-message', messageId: msgId });
     if (!auth) return;
 
     const stored = await store.getMessage(msgId, auth.payload.address);
@@ -169,7 +175,7 @@ export function createMailServer(
   }
 
   async function handleGetMessage(req: IncomingMessage, res: ServerResponse, msgId: string): Promise<void> {
-    const auth = await requireAuth(req, res);
+    const auth = await requireAuth(req, res, { action: 'get-message', messageId: msgId });
     if (!auth) return;
 
     const msg = await store.getClaimedMessage(msgId, auth.payload.address);
@@ -178,7 +184,7 @@ export function createMailServer(
   }
 
   async function handleClaim(req: IncomingMessage, res: ServerResponse, msgId: string): Promise<void> {
-    const auth = await requireAuth(req, res);
+    const auth = await requireAuth(req, res, { action: 'claim-message', messageId: msgId });
     if (!auth) return;
 
     let body: string;
@@ -274,7 +280,7 @@ export function createMailServer(
         if (!resolvedPath.startsWith(WEB_DIR_RESOLVED + '/') && resolvedPath !== WEB_DIR_RESOLVED) {
           return json(res, 403, { error: 'forbidden' });
         }
-        const data = await readFile(filePath);
+        const data = await readFile(resolvedPath);
         const ct = filePath.endsWith('.html') ? 'text/html; charset=utf-8'
                  : filePath.endsWith('.js') || filePath.endsWith('.mjs') ? 'application/javascript'
                  : filePath.endsWith('.css') ? 'text/css'
@@ -321,6 +327,7 @@ export function createMailServer(
   async function requireAuth(
     req: IncomingMessage,
     res: ServerResponse,
+    expected: { action: 'get-inbox' | 'claim-message' | 'get-message'; messageId?: string },
   ): Promise<Awaited<ReturnType<typeof verifyInboxAuth>> | null> {
     const authHeader = req.headers['x-stackmail-auth'];
     if (!authHeader) {
@@ -329,11 +336,20 @@ export function createMailServer(
     }
 
     try {
-      return await verifyInboxAuth(
+      const auth = await verifyInboxAuth(
         Array.isArray(authHeader) ? authHeader[0] : authHeader,
         config,
         store,
       );
+      if (auth.payload.action !== expected.action) {
+        json(res, 403, { error: 'auth-action-mismatch', message: `expected action ${expected.action}` });
+        return null;
+      }
+      if (expected.messageId != null && auth.payload.messageId !== expected.messageId) {
+        json(res, 403, { error: 'auth-message-id-mismatch', message: 'messageId in auth payload does not match route' });
+        return null;
+      }
+      return auth;
     } catch (err) {
       if (err instanceof AuthError) {
         json(res, err.statusCode, { error: err.reason, message: err.message });

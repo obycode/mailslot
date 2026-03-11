@@ -11,11 +11,11 @@ import {
   someCV,
   tupleCV,
   uintCV,
-  stringAsciiCV,
   bufferCV,
   Pc,
   PostConditionMode,
-  serializeCV,
+  serializeCVBytes,
+  ClarityType,
 } from '@stacks/transactions';
 import type { ClarityValue } from '@stacks/transactions';
 
@@ -28,6 +28,8 @@ const RESERVOIR   = 'SP3QFYVTMS0PRJT3K3GMDW9DGR33TDHENSDWVNQMR.sm-reservoir';
 const TOKEN       = 'SP3QFYVTMS0PRJT3K3GMDW9DGR33TDHENSDWVNQMR.sm-test-token';
 const TOKEN_NAME  = 'sm-test-token'; // asset name inside the SIP-010 contract
 const CHAIN_ID    = 1; // mainnet; updated from /status if available
+const OPEN_TAP_AMOUNT = 1_000_000n; // 1 STX in microstacks
+const OPEN_TAP_NONCE  = 0n;
 
 // (no session object needed — we use getStacksProvider() after wallet detection)
 
@@ -46,14 +48,6 @@ function hexToBytes(h: string): Uint8Array {
   return out;
 }
 
-function concat(arrs: Uint8Array[]): Uint8Array {
-  const total = arrs.reduce((s, a) => s + a.length, 0);
-  const out   = new Uint8Array(total);
-  let off = 0;
-  for (const a of arrs) { out.set(a, off); off += a.length; }
-  return out;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Canonical pipe key ordering (using @stacks/transactions serializeCV)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -65,8 +59,8 @@ interface PipeKey {
 }
 
 function canonicalPipeKey(token: string | null, a: string, b: string): PipeKey {
-  const pa = serializeCV(principalCV(a));
-  const pb = serializeCV(principalCV(b));
+  const pa = serializeCVBytes(principalCV(a));
+  const pb = serializeCVBytes(principalCV(b));
   for (let i = 0; i < Math.min(pa.length, pb.length); i++) {
     if (pa[i] < pb[i]) return { token, 'principal-1': a, 'principal-2': b };
     if (pa[i] > pb[i]) return { token, 'principal-1': b, 'principal-2': a };
@@ -119,30 +113,31 @@ function cvToWalletJson(cv: ClarityValue): unknown {
     case ClarityType.Int:
       return { type: 'int', value: String(cv.value) };
     case ClarityType.PrincipalStandard:
-      return { type: 'principal', value: cv.address.hash160
-        ? `S${cv.address.version}${cv.address.hash160}` // simplified; serializeCV handles actual encoding
-        : String(cv) };
     case ClarityType.PrincipalContract:
-      return { type: 'principal', value: `${cv.contractName}` };
+      return { type: 'principal', value: cv.value };
     case ClarityType.StringASCII:
-      return { type: 'string-ascii', value: cv.data };
+      return { type: 'string-ascii', value: cv.value };
     case ClarityType.StringUTF8:
-      return { type: 'string-utf8', value: cv.data };
+      return { type: 'string-utf8', value: cv.value };
     case ClarityType.OptionalNone:
       return { type: 'none' };
     case ClarityType.OptionalSome:
       return { type: 'some', value: cvToWalletJson(cv.value) };
+    case ClarityType.ResponseOk:
+      return { type: 'ok', value: cvToWalletJson(cv.value) };
+    case ClarityType.ResponseErr:
+      return { type: 'err', value: cvToWalletJson(cv.value) };
     case ClarityType.Buffer:
-      return { type: 'buffer', data: bytesToHex(cv.buffer) };
+      return { type: 'buffer', data: cv.value };
     case ClarityType.Tuple: {
       const data: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(cv.data)) {
+      for (const [k, v] of Object.entries(cv.value as Record<string, ClarityValue>)) {
         data[k] = cvToWalletJson(v);
       }
       return { type: 'tuple', data };
     }
     case ClarityType.List: {
-      return { type: 'list', list: cv.list.map(cvToWalletJson) };
+      return { type: 'list', list: cv.value.map(cvToWalletJson) };
     }
     case ClarityType.BoolTrue:
       return { type: 'bool', value: true };
@@ -175,7 +170,7 @@ async function encryptMail(payload: unknown, recipientPubkeyHex: string): Promis
   const key         = hkdf(sha256, sharedX, salt, info, 32);
   const iv          = crypto.getRandomValues(new Uint8Array(12));
   const plaintext   = new TextEncoder().encode(JSON.stringify(payload));
-  const cryptoKey   = await crypto.subtle.importKey('raw', key, 'AES-GCM', false, ['encrypt']);
+  const cryptoKey   = await crypto.subtle.importKey('raw', new Uint8Array(key), 'AES-GCM', false, ['encrypt']);
   const encrypted   = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, cryptoKey, plaintext));
   return { v: 1, epk: bytesToHex(epkBytes), iv: bytesToHex(iv), data: bytesToHex(encrypted) };
 }
@@ -404,7 +399,7 @@ interface TapState {
 
 function cvPrincipalHex(addr: string): string {
   // Use serializeCV from @stacks/transactions to get the canonical bytes
-  const bytes = serializeCV(principalCV(addr));
+  const bytes = serializeCVBytes(principalCV(addr));
   return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
@@ -463,7 +458,7 @@ async function queryOnChainTap(userAddr: string): Promise<TapState | null> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Open mailbox — calls sm-reservoir::create-tap-with-borrowed-liquidity
+// Open mailbox — calls sm-reservoir::create-tap
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function openMailbox(): Promise<void> {
@@ -478,16 +473,17 @@ async function openMailbox(): Promise<void> {
       openContractCall({
         contractAddress: RESERVOIR.split('.')[0],
         contractName:    RESERVOIR.split('.')[1],
-        functionName:    'create-tap-with-borrowed-liquidity',
-        functionArgs:    [principalCV(SF_CONTRACT), someCV(principalCV(TOKEN))],
+        functionName:    'create-tap',
+        functionArgs: [
+          principalCV(SF_CONTRACT),
+          noneCV(),
+          uintCV(OPEN_TAP_AMOUNT),
+          uintCV(OPEN_TAP_NONCE),
+        ],
         network:         'mainnet',
         postConditionMode: PostConditionMode.Deny,
         postConditions: [
-          // User sends nothing
-          Pc.principal(walletAddress!).willSendEq(0n).ustx(),
-          Pc.principal(walletAddress!).willSendEq(0n).ft(TOKEN, TOKEN_NAME),
-          // Reservoir lends tokens — cover the transfer so Deny mode doesn't abort
-          Pc.principal(RESERVOIR).willSendGte(0n).ft(TOKEN, TOKEN_NAME),
+          Pc.principal(walletAddress!).willSendEq(OPEN_TAP_AMOUNT).ustx(),
         ],
         appDetails: { name: 'Stackmail', icon: window.location.origin + '/favicon.ico' },
         onFinish:  (data: { txId?: string; txid?: string; tx_id?: string }) =>
