@@ -64,7 +64,7 @@ Good default when we want SSH access and simple local-disk persistence:
 Example Caddy file:
 
 ```caddy
-mailslot.yourdomain.com {
+mailslot.locker {
     reverse_proxy 127.0.0.1:8800
 }
 ```
@@ -89,8 +89,8 @@ MAILSLOT_MAX_DEFERRED_PER_RECIPIENT=20
 MAILSLOT_MAX_DEFERRED_GLOBAL=200
 MAILSLOT_DEFERRED_MESSAGE_TTL_MS=86400000
 MAILSLOT_MAX_BORROW_PER_TAP=100000
-MAILSLOT_AUTH_AUDIENCE=https://mailslot.example.com
-MAILSLOT_ALLOWED_ORIGINS=https://mailslot.example.com
+MAILSLOT_AUTH_AUDIENCE=https://mailslot.locker
+MAILSLOT_ALLOWED_ORIGINS=https://mailslot.locker
 MAILSLOT_RATE_LIMIT_WINDOW_MS=60000
 MAILSLOT_RATE_LIMIT_MAX=120
 MAILSLOT_RATE_LIMIT_AUTH_MAX=60
@@ -178,6 +178,19 @@ fly deploy
 fly status
 curl https://<app>.fly.dev/health
 curl https://<app>.fly.dev/status
+```
+
+6. Attach the production hostname:
+
+```bash
+fly certs add mailslot.locker
+```
+
+Then point your DNS to Fly and verify:
+
+```bash
+curl https://mailslot.locker/health
+curl https://mailslot.locker/status
 ```
 
 ## Runtime Config Direction

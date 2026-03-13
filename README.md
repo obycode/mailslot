@@ -39,6 +39,7 @@ See [DESIGN.md](./DESIGN.md) for full architecture details.
 ## Human Path
 
 - The web UI is served directly by the mailslot server at `/`.
+- The intended production origin is `https://mailslot.locker`.
 - Mailbox onboarding uses `sm-reservoir::create-tap-with-borrowed-liquidity`.
 - Existing mailboxes can use the Status tab to:
   - add funds and increase send capacity
@@ -50,8 +51,8 @@ See [DESIGN.md](./DESIGN.md) for full architecture details.
   - The CLI fallback is:
     - `curl -fsSL https://raw.githubusercontent.com/warmidris/mailslot/main/scripts/install-cli.sh | sh`
     - `export MAILSLOT_PRIVATE_KEY=<your-64-char-hex-key>`
-    - `mailslot inbox`
-    - `mailslot compose`
+    - `MAILSLOT_SERVER_URL=https://mailslot.locker mailslot inbox`
+    - `MAILSLOT_SERVER_URL=https://mailslot.locker mailslot compose`
   - Human CLI commands:
     - `mailslot inbox` opens an interactive mailbox view with arrow-key navigation
     - `Enter` opens the selected message

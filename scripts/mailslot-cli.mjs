@@ -19,7 +19,7 @@ const {
   sendMessage,
 } = mailslot;
 
-const DEFAULT_SERVER_URL = process.env.MAILSLOT_SERVER_URL ?? 'http://127.0.0.1:8800';
+const DEFAULT_SERVER_URL = process.env.MAILSLOT_SERVER_URL ?? 'https://mailslot.locker';
 const CONFIG_PATH = path.join(os.homedir(), '.config', 'mailslot', 'config.json');
 
 function usage() {
