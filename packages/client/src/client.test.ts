@@ -33,14 +33,16 @@ describe('MailslotClient.getInbox', () => {
     const entries = [
       { id: 'msg-1', from: 'SP1ALICE', sentAt: Date.now(), amount: '1000', claimed: false },
     ];
-    const mockFetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ messages: entries }), { status: 200 }),
-    );
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ authAudience: 'https://mailslot.locker' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ messages: entries }), { status: 200 }));
     vi.stubGlobal('fetch', mockFetch);
 
     const client = new MailslotClient(makeConfig());
     const result = await client.getInbox();
     expect(result).toEqual(entries);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch.mock.calls[0][0]).toContain('/status');
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('/inbox'),
       expect.objectContaining({ headers: expect.objectContaining({ 'x-mailslot-auth': expect.any(String) }) }),
@@ -127,6 +129,8 @@ describe('MailslotClient.claim', () => {
 
     const msgId = 'msg-claim-1';
     const mockFetch = vi.fn()
+      // GET /status
+      .mockResolvedValueOnce(new Response(JSON.stringify({ authAudience: 'https://mailslot.locker' }), { status: 200 }))
       // GET /inbox/:id/preview
       .mockResolvedValueOnce(new Response(JSON.stringify({
         messageId: msgId,
@@ -165,7 +169,7 @@ describe('MailslotClient.claim', () => {
     expect(result.claimProof.proofVerified).toBeNull();
 
     // The claim call should have sent the correct secret
-    const claimCall = mockFetch.mock.calls[1];
+    const claimCall = mockFetch.mock.calls[2];
     const claimBody = JSON.parse(claimCall[1].body as string) as { secret: string };
     expect(claimBody.secret).toBe(secretHex);
   });
@@ -177,15 +181,18 @@ describe('MailslotClient.claim', () => {
       recipientPubkeyHex,
     );
     const mockFetch = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({
-      encryptedPayload,
-      hashedSecret: hashSecret(randomBytes(32).toString('hex')),
-      pendingPayment: null,
-    }), { status: 200 }));
+      authAudience: 'https://mailslot.locker',
+    }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        encryptedPayload,
+        hashedSecret: hashSecret(randomBytes(32).toString('hex')),
+        pendingPayment: null,
+      }), { status: 200 }));
     vi.stubGlobal('fetch', mockFetch);
 
     const client = new MailslotClient(makeConfig());
     await expect(client.claim('msg-hash-mismatch')).rejects.toBeInstanceOf(MailslotError);
-    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
   it('persists claim proof via saveClaimProof hook', async () => {
@@ -197,6 +204,7 @@ describe('MailslotClient.claim', () => {
     );
     const saveClaimProof = vi.fn(async () => {});
     vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ authAudience: 'https://mailslot.locker' }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         encryptedPayload,
         hashedSecret: hashedSecretHex,
@@ -233,6 +241,7 @@ describe('MailslotClient.claim', () => {
     );
 
     vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ authAudience: 'https://mailslot.locker' }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         encryptedPayload,
         hashedSecret: hashSecret(secretHex),
@@ -257,6 +266,8 @@ describe('MailslotClient.poll', () => {
     const msgId = 'msg-poll-1';
 
     const mockFetch = vi.fn()
+      // GET /status
+      .mockResolvedValueOnce(new Response(JSON.stringify({ authAudience: 'https://mailslot.locker' }), { status: 200 }))
       // GET /inbox
       .mockResolvedValueOnce(new Response(JSON.stringify({
         messages: [{ id: msgId, from: 'SP1BOB', sentAt: Date.now(), amount: '1000', claimed: false }],
@@ -288,6 +299,7 @@ describe('MailslotClient.poll', () => {
 
   it('collects errors without throwing when a claim fails', async () => {
     vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ authAudience: 'https://mailslot.locker' }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         messages: [{ id: 'msg-broken', from: 'SP1X', sentAt: Date.now(), amount: '1000', claimed: false }],
       }), { status: 200 }))

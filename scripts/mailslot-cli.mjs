@@ -5,6 +5,18 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import readlinePromises from 'node:readline/promises';
+import { createNetwork } from '@stacks/network';
+import {
+  AnchorMode,
+  PostConditionMode,
+  broadcastTransaction,
+  bufferCV,
+  makeContractCall,
+  noneCV,
+  principalCV,
+  someCV,
+  uintCV,
+} from '@stacks/transactions';
 
 const mailslotModule = await import('./mailslot-client.ts');
 const mailslot = mailslotModule.default ?? mailslotModule;
@@ -16,7 +28,10 @@ const {
   getServerStatus,
   getTapState,
   keypairFromPrivkey,
+  prepareBorrowMoreLiquidity,
   sendMessage,
+  syncTapState,
+  deriveMailboxCapacityPolicy,
 } = mailslot;
 
 const DEFAULT_SERVER_URL = process.env.MAILSLOT_SERVER_URL ?? 'https://mailslot.locker';
@@ -31,6 +46,7 @@ Human commands:
   mailslot read <message-id> [--server <url>]
   mailslot reply <message-id> [--server <url>]
   mailslot status [--server <url>]
+  mailslot refresh-capacity [--server <url>] [--amount <raw-units>] [--json]
 
 Agent/raw commands:
   mailslot inbox --json
@@ -117,6 +133,24 @@ function formatAmount(amount, token) {
   return `${amount} ${token ?? 'units'}`;
 }
 
+function getReceiveCapacitySummary(status, tap) {
+  const policy = deriveMailboxCapacityPolicy(status);
+  const receiveLiquidity = tap?.pipeState.serverBalance ?? 0n;
+  const messagePrice = policy.messagePrice > 0n ? policy.messagePrice : 1n;
+  const remainingReceives = receiveLiquidity / messagePrice;
+  const low = receiveLiquidity <= policy.lowReceiveThreshold;
+  const refreshAmount = receiveLiquidity >= policy.receiveCapacityTarget
+    ? 0n
+    : policy.receiveCapacityTarget - receiveLiquidity;
+  return {
+    ...policy,
+    receiveLiquidity,
+    remainingReceives,
+    low,
+    refreshAmount,
+  };
+}
+
 function clearScreen() {
   process.stdout.write('\x1Bc');
 }
@@ -185,6 +219,7 @@ function renderInboxScreen(ctx, messages, selected, includeClaimed) {
   clearScreen();
   const total = messages.length;
   const token = ctx.status.supportedToken ?? 'token';
+  const capacity = getReceiveCapacitySummary(ctx.status, ctx.tap);
   console.log(`Mailslot inbox for ${ctx.address}`);
   console.log(`Server: ${ctx.serverUrl}`);
   if (ctx.tap) {
@@ -192,6 +227,11 @@ function renderInboxScreen(ctx, messages, selected, includeClaimed) {
       `Send capacity: ${formatAmount(ctx.tap.pipeState.myBalance.toString(), token)} | ` +
       `Receive liquidity: ${formatAmount(ctx.tap.pipeState.serverBalance.toString(), token)} | ` +
       `Nonce: ${ctx.tap.pipeState.nonce.toString()}`
+    );
+    console.log(
+      capacity.low
+        ? `Receive capacity low: about ${capacity.remainingReceives} more message(s). Run: mailslot refresh-capacity`
+        : `Receive capacity: about ${capacity.remainingReceives} message(s) at current pricing`
     );
   }
   console.log('');
@@ -318,15 +358,23 @@ async function fetchContext(options) {
 
 async function printStatus(ctx) {
   const token = ctx.status.supportedToken ?? 'token';
+  const capacity = getReceiveCapacitySummary(ctx.status, ctx.tap);
   console.log(`Address: ${ctx.address}`);
   console.log(`Server:  ${ctx.serverUrl}`);
   console.log(`Token:   ${ctx.status.supportedToken ?? '(unknown)'}`);
+  console.log(`Price:   ${formatAmount(capacity.messagePrice.toString(), token)}`);
   if (!ctx.tap) {
     console.log('Tap:     not found');
     return;
   }
   console.log(`Send capacity:      ${formatAmount(ctx.tap.pipeState.myBalance.toString(), token)}`);
   console.log(`Receive liquidity:  ${formatAmount(ctx.tap.pipeState.serverBalance.toString(), token)}`);
+  console.log(`Receive target:     ${formatAmount(capacity.receiveCapacityTarget.toString(), token)}`);
+  console.log(`Receive warning:    ${formatAmount(capacity.lowReceiveThreshold.toString(), token)}`);
+  console.log(`Messages receivable: about ${capacity.remainingReceives}`);
+  if (capacity.low) {
+    console.log(`Alert:              low receive capacity; run 'mailslot refresh-capacity'`);
+  }
   console.log(`Nonce:              ${ctx.tap.pipeState.nonce.toString()}`);
   console.log(`Tap source:         ${ctx.tap.source}`);
 }
@@ -348,6 +396,79 @@ async function readOne(ctx, messageId, asJson = false) {
   console.log('');
   console.log(message.body);
   return message;
+}
+
+async function refreshCapacity(ctx, options) {
+  if (!ctx.tap) throw new Error('No tap found. Open a mailbox before refreshing capacity.');
+
+  const capacity = getReceiveCapacitySummary(ctx.status, ctx.tap);
+  const token = ctx.status.supportedToken ?? 'token';
+  const requestedAmount = typeof options.amount === 'string' ? BigInt(options.amount) : null;
+  const amount = requestedAmount ?? capacity.refreshAmount;
+
+  if (amount <= 0n) {
+    const payload = {
+      ok: true,
+      refreshed: false,
+      reason: 'capacity-already-sufficient',
+      receiveLiquidity: ctx.tap.pipeState.serverBalance.toString(),
+      targetReceiveLiquidity: capacity.receiveCapacityTarget.toString(),
+    };
+    if (options.json) {
+      console.log(JSON.stringify(payload, null, 2));
+    } else {
+      console.log('Receive capacity is already at or above target.');
+    }
+    return payload;
+  }
+
+  const action = await prepareBorrowMoreLiquidity(ctx.privateKey, amount, ctx.serverUrl);
+  const [contractAddress, contractName] = action.reservoirContract.split('.');
+  const network = createNetwork({ network: action.chainId === 1 ? 'mainnet' : 'testnet' });
+  const tx = await makeContractCall({
+    network,
+    senderKey: ctx.privateKey,
+    contractAddress,
+    contractName,
+    functionName: 'borrow-liquidity',
+    functionArgs: [
+      principalCV(action.stackflowContract),
+      uintCV(BigInt(action.amount)),
+      uintCV(BigInt(action.fee ?? '0')),
+      action.token == null ? noneCV() : someCV(principalCV(action.token)),
+      uintCV(BigInt(action.myBalance)),
+      uintCV(BigInt(action.reservoirBalance)),
+      bufferCV(Buffer.from(String(action.mySignature).replace(/^0x/, ''), 'hex')),
+      bufferCV(Buffer.from(String(action.reservoirSignature).replace(/^0x/, ''), 'hex')),
+      uintCV(BigInt(action.nonce)),
+    ],
+    anchorMode: AnchorMode.Any,
+    postConditionMode: PostConditionMode.Allow,
+    validateWithAbi: false,
+  });
+  const result = await broadcastTransaction({ transaction: tx, network });
+  if ('reason' in result) {
+    throw new Error(`refresh-capacity broadcast failed: ${result.reason}${result.error ? ` (${result.error})` : ''}`);
+  }
+  await syncTapState(ctx.privateKey, action, ctx.serverUrl);
+
+  const payload = {
+    ok: true,
+    refreshed: true,
+    amount: action.amount,
+    fee: action.fee ?? '0',
+    txid: result.txid,
+    targetReceiveLiquidity: capacity.receiveCapacityTarget.toString(),
+    commandHint: 'mailslot status',
+  };
+  if (options.json) {
+    console.log(JSON.stringify(payload, null, 2));
+  } else {
+    console.log(`Refreshed receive capacity by ${formatAmount(action.amount, token)}.`);
+    console.log(`Borrow fee: ${formatAmount(action.fee ?? '0', token)}`);
+    console.log(`Txid: ${result.txid}`);
+  }
+  return payload;
 }
 
 async function runInbox(ctx, options) {
@@ -422,6 +543,11 @@ async function main() {
 
   if (command === 'status') {
     await printStatus(ctx);
+    return;
+  }
+
+  if (command === 'refresh-capacity') {
+    await refreshCapacity(ctx, options);
     return;
   }
 

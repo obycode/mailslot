@@ -57,6 +57,12 @@ export const DEFAULTS = {
   MESSAGE_PRICE: 1000n,
 } as const;
 
+export const MAILBOX_POLICY = {
+  SEND_CAPACITY_MULTIPLIER: 10n,
+  TARGET_RECEIVE_CAPACITY_MULTIPLIER: 20n,
+  LOW_RECEIVE_CAPACITY_MULTIPLIER: 5n,
+} as const;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface Keypair {
@@ -585,6 +591,21 @@ function resolveChainId(status: ServerStatus, fallback?: number): number {
 
 function resolveMessagePrice(status: ServerStatus, fallback?: bigint): bigint {
   return status.messagePriceSats ? BigInt(status.messagePriceSats) : (fallback ?? DEFAULTS.MESSAGE_PRICE);
+}
+
+export function deriveMailboxCapacityPolicy(status: ServerStatus): {
+  messagePrice: bigint;
+  sendCapacityTarget: bigint;
+  receiveCapacityTarget: bigint;
+  lowReceiveThreshold: bigint;
+} {
+  const messagePrice = resolveMessagePrice(status);
+  return {
+    messagePrice,
+    sendCapacityTarget: messagePrice * MAILBOX_POLICY.SEND_CAPACITY_MULTIPLIER,
+    receiveCapacityTarget: messagePrice * MAILBOX_POLICY.TARGET_RECEIVE_CAPACITY_MULTIPLIER,
+    lowReceiveThreshold: messagePrice * MAILBOX_POLICY.LOW_RECEIVE_CAPACITY_MULTIPLIER,
+  };
 }
 
 function resolveAuthAudience(status: ServerStatus): string {

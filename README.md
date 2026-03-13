@@ -41,9 +41,11 @@ See [DESIGN.md](./DESIGN.md) for full architecture details.
 - The web UI is served directly by the mailslot server at `/`.
 - The intended production origin is `https://mailslot.locker`.
 - Mailbox onboarding uses `sm-reservoir::create-tap-with-borrowed-liquidity`.
+  - Default mailbox sizing is now `10x` message price for user send capacity and `20x` message price for reservoir-provided receive liquidity.
 - Existing mailboxes can use the Status tab to:
   - add funds and increase send capacity
-  - borrow more liquidity and increase receive power
+  - refresh capacity back to the default receive target
+  - borrow more liquidity manually when needed
 - The UI reads live reservoir and StackFlow config from `/status` and verifies tap existence on-chain.
 - Inbox claiming in the web UI uses wallet signatures and can use wallet-native encrypt/decrypt when Leather exposes `stx_encryptMessage` / `stx_decryptMessage`.
   - The browser private-key fallback is now behind the server-side `MAILSLOT_ENABLE_BROWSER_DECRYPT_KEY` flag and should stay off for real deployments.
@@ -60,6 +62,7 @@ See [DESIGN.md](./DESIGN.md) for full architecture details.
     - `C` opens a compose prompt
     - `mailslot read <message-id>` reads one message directly
     - `mailslot status` shows send capacity and receive liquidity
+    - `mailslot refresh-capacity` restores receive liquidity to the default mailbox target
   - The fallback UI accepts both raw 32-byte hex private keys (`64` hex chars) and Stacks-exported 33-byte compressed private keys (`66` hex chars) with a trailing `01`.
   - The local key flow is now a compatibility fallback, not the intended long-term UX.
 

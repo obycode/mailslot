@@ -32,9 +32,10 @@ import type { ClarityValue } from '@stacks/transactions';
 const SF_CONTRACT = 'SP3QFYVTMS0PRJT3K3GMDW9DGR33TDHENSDWVNQMR.sm-stackflow';
 const RESERVOIR   = 'SP3QFYVTMS0PRJT3K3GMDW9DGR33TDHENSDWVNQMR.sm-reservoir';
 const CHAIN_ID    = 1; // mainnet; updated from /status if available
-const OPEN_TAP_AMOUNT = 10_000n; // outbound liquidity from the user (sats)
+const OPEN_TAP_MULTIPLIER = 10n;
 const OPEN_TAP_NONCE  = 0n;
-const OPEN_BORROW_AMOUNT = 10_000n; // inbound liquidity from the reservoir (sats)
+const TARGET_RECEIVE_CAPACITY_MULTIPLIER = 20n;
+const LOW_RECEIVE_CAPACITY_MULTIPLIER = 5n;
 const OPEN_BORROW_NONCE  = 1n;
 
 // (no session object needed — we use getStacksProvider() after wallet detection)
@@ -72,6 +73,51 @@ function chainIdToNetworkName(chainId: number): 'mainnet' | 'testnet' {
 
 function chainIdToHiroApi(chainId: number): string {
   return chainId === 1 ? 'https://api.mainnet.hiro.so' : 'https://api.testnet.hiro.so';
+}
+
+function getRuntimeMessagePrice(): bigint {
+  const raw = serverStatus.messagePriceSats;
+  if (typeof raw === 'string' && /^\d+$/.test(raw.trim())) return BigInt(raw);
+  return 1000n;
+}
+
+function getOpenTapAmount(): bigint {
+  return getRuntimeMessagePrice() * OPEN_TAP_MULTIPLIER;
+}
+
+function getTargetReceiveLiquidity(): bigint {
+  return getRuntimeMessagePrice() * TARGET_RECEIVE_CAPACITY_MULTIPLIER;
+}
+
+function getLowReceiveLiquidityThreshold(): bigint {
+  return getRuntimeMessagePrice() * LOW_RECEIVE_CAPACITY_MULTIPLIER;
+}
+
+function getRemainingReceives(liquidity: bigint): bigint {
+  const price = getRuntimeMessagePrice();
+  if (price <= 0n) return 0n;
+  return liquidity / price;
+}
+
+function getCapacityRefreshAmount(liquidity: bigint): bigint {
+  const target = getTargetReceiveLiquidity();
+  return liquidity >= target ? 0n : target - liquidity;
+}
+
+function describeReceiveCapacity(liquidity: bigint): { tone: 'good' | 'low'; message: string } {
+  const remainingReceives = getRemainingReceives(liquidity);
+  const threshold = getLowReceiveLiquidityThreshold();
+  const target = getTargetReceiveLiquidity();
+  if (liquidity <= threshold) {
+    return {
+      tone: 'low',
+      message: `Receive capacity is low: about ${remainingReceives} more message(s). Refreshing restores it to ${getRemainingReceives(target)} messages.`,
+    };
+  }
+  return {
+    tone: 'good',
+    message: `Receive capacity covers about ${remainingReceives} message(s).`,
+  };
 }
 
 function extractSignature(resp: unknown): string | null {
@@ -1421,11 +1467,16 @@ async function addFundsToTap(): Promise<void> {
   }
 }
 
-async function borrowMoreLiquidity(): Promise<void> {
-  const btn = document.getElementById('borrow-more-btn') as HTMLButtonElement;
+async function borrowMoreLiquidity(
+  explicitAmount?: bigint,
+  options: { buttonId?: string; buttonText?: string; spinnerText?: string; successText?: string } = {},
+): Promise<void> {
+  const btn = document.getElementById(options.buttonId ?? 'borrow-more-btn') as HTMLButtonElement | null;
   const statusEl = document.getElementById('liquidity-status') as HTMLElement;
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Borrowing…';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner"></span> ${options.spinnerText ?? 'Borrowing…'}`;
+  }
   statusEl.innerHTML = '';
 
   try {
@@ -1436,9 +1487,13 @@ async function borrowMoreLiquidity(): Promise<void> {
     const reservoir = getRuntimeReservoirContract();
     const supportedToken = getRuntimeSupportedToken();
     const tokenAssetName = supportedToken == null ? null : getRuntimeSupportedTokenAssetName();
-    const amount = readPositiveAmountInput('borrow-more-amount-input', 'Borrow amount');
+    const amount = explicitAmount ?? readPositiveAmountInput('borrow-more-amount-input', 'Borrow amount');
     const tap = await queryOnChainTap(walletAddress);
     if (!tap) throw new Error('No on-chain tap found. Open your mailbox first.');
+    if (amount <= 0n) {
+      statusEl.innerHTML = '<div class="alert alert-info">Receive capacity is already at or above target.</div>';
+      return;
+    }
     const nextMyBalance = tap.userBalance;
     const nextReservoirBalance = tap.reservoirBalance + amount;
     const nextNonce = tap.nonce + 1n;
@@ -1538,15 +1593,30 @@ async function borrowMoreLiquidity(): Promise<void> {
       reservoirSignature: params.reservoirSignature!,
     });
     await loadStatus();
-    statusEl.innerHTML = `<div class="alert alert-success">Receive liquidity increased successfully.<br><a href="${escHtml(formatExplorerTxUrl(txId, chainId))}" target="_blank" rel="noopener" class="mono" style="color:inherit">${escHtml(txId)}</a></div>`;
-    (document.getElementById('borrow-more-amount-input') as HTMLInputElement).value = '';
+    statusEl.innerHTML = `<div class="alert alert-success">${escHtml(options.successText ?? 'Receive liquidity increased successfully.')}<br><a href="${escHtml(formatExplorerTxUrl(txId, chainId))}" target="_blank" rel="noopener" class="mono" style="color:inherit">${escHtml(txId)}</a></div>`;
+    const input = document.getElementById('borrow-more-amount-input') as HTMLInputElement | null;
+    if (input) input.value = '';
   } catch (e) {
     const msg = typeof e === 'string' ? e : ((e as Error)?.message || (e as { reason?: string })?.reason || JSON.stringify(e) || 'Unknown error');
     statusEl.innerHTML = `<div class="alert alert-error">${escHtml(msg)}</div>`;
   } finally {
-    btn.disabled = false;
-    btn.textContent = 'Borrow More';
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = options.buttonText ?? 'Borrow More';
+    }
   }
+}
+
+async function refreshReceiveCapacity(): Promise<void> {
+  const tap = walletAddress ? await queryOnChainTap(walletAddress) : null;
+  const currentLiquidity = tap?.reservoirBalance ?? pipeState.serverBalance;
+  const refreshAmount = getCapacityRefreshAmount(currentLiquidity);
+  await borrowMoreLiquidity(refreshAmount, {
+    buttonId: 'refresh-capacity-btn',
+    buttonText: 'Refresh Capacity',
+    spinnerText: 'Refreshing…',
+    successText: 'Receive capacity refreshed successfully.',
+  });
 }
 
 function formatExplorerTxUrl(txId: string, chainId: number): string {
@@ -1636,6 +1706,8 @@ async function openMailbox(): Promise<void> {
     const chainId = (serverStatus.chainId as number | undefined) ?? CHAIN_ID;
     const sfContract = getRuntimeSfContract();
     const reservoir = getRuntimeReservoirContract();
+    const openTapAmount = getOpenTapAmount();
+    const openBorrowAmount = getTargetReceiveLiquidity();
     const supportedToken = getRuntimeSupportedToken();
     const supportedTokenAssetName = supportedToken == null ? null : getRuntimeSupportedTokenAssetName();
     if (!isContractPrincipal(reservoir)) {
@@ -1654,8 +1726,8 @@ async function openMailbox(): Promise<void> {
     const borrowStateCV = buildTransferCV({
       pipeKey,
       forPrincipal: walletAddress,
-      myBalance: OPEN_TAP_AMOUNT,
-      theirBalance: OPEN_BORROW_AMOUNT,
+      myBalance: openTapAmount,
+      theirBalance: openBorrowAmount,
       nonce: OPEN_BORROW_NONCE,
       action: 2n,
       actor: reservoir,
@@ -1677,11 +1749,11 @@ async function openMailbox(): Promise<void> {
         body: JSON.stringify({
           borrower: walletAddress,
           token: supportedToken,
-          tapAmount: OPEN_TAP_AMOUNT.toString(),
+          tapAmount: openTapAmount.toString(),
           tapNonce: OPEN_TAP_NONCE.toString(),
-          borrowAmount: OPEN_BORROW_AMOUNT.toString(),
-          myBalance: OPEN_TAP_AMOUNT.toString(),
-          reservoirBalance: OPEN_BORROW_AMOUNT.toString(),
+          borrowAmount: openBorrowAmount.toString(),
+          myBalance: openTapAmount.toString(),
+          reservoirBalance: openBorrowAmount.toString(),
           borrowNonce: OPEN_BORROW_NONCE.toString(),
           mySignature,
         }),
@@ -1700,11 +1772,11 @@ async function openMailbox(): Promise<void> {
     const finalBorrowFee = BigInt(params.borrowFee);
     const tokenContractId = supportedToken as `${string}.${string}` | null;
     const postConditions = supportedToken == null ? [
-      Pc.principal(walletAddress!).willSendEq(OPEN_TAP_AMOUNT + finalBorrowFee).ustx(),
-      Pc.principal(reservoir).willSendEq(OPEN_BORROW_AMOUNT).ustx(),
+      Pc.principal(walletAddress!).willSendEq(openTapAmount + finalBorrowFee).ustx(),
+      Pc.principal(reservoir).willSendEq(openBorrowAmount).ustx(),
     ] : [
-      Pc.principal(walletAddress!).willSendEq(OPEN_TAP_AMOUNT + finalBorrowFee).ft(tokenContractId!, supportedTokenAssetName!),
-      Pc.principal(reservoir).willSendEq(OPEN_BORROW_AMOUNT).ft(tokenContractId!, supportedTokenAssetName!),
+      Pc.principal(walletAddress!).willSendEq(openTapAmount + finalBorrowFee).ft(tokenContractId!, supportedTokenAssetName!),
+      Pc.principal(reservoir).willSendEq(openBorrowAmount).ft(tokenContractId!, supportedTokenAssetName!),
     ];
 
     setProgress('Waiting for wallet transaction confirmation…');
@@ -1717,12 +1789,12 @@ async function openMailbox(): Promise<void> {
           functionArgs: [
             principalCV(sfContract),
             supportedToken == null ? noneCV() : someCV(principalCV(supportedToken)),
-            uintCV(OPEN_TAP_AMOUNT),
+            uintCV(openTapAmount),
             uintCV(OPEN_TAP_NONCE),
-            uintCV(OPEN_BORROW_AMOUNT),
+            uintCV(openBorrowAmount),
             uintCV(finalBorrowFee),
-            uintCV(OPEN_TAP_AMOUNT),
-            uintCV(OPEN_BORROW_AMOUNT),
+            uintCV(openTapAmount),
+            uintCV(openBorrowAmount),
             bufferCV(hexToBytes(mySignature)),
             bufferCV(hexToBytes(reservoirSignature)),
             uintCV(OPEN_BORROW_NONCE),
@@ -2235,8 +2307,10 @@ async function fetchRecipientInfo(toAddr: string): Promise<void> {
       };
       (document.getElementById('pay-balance') as HTMLElement).textContent = formatPaymentAmount(pipeState.myBalance);
       (document.getElementById('pay-nonce') as HTMLElement).textContent   = `${pipeState.nonce}`;
+      const receiveSummary = describeReceiveCapacity(pipeState.serverBalance);
       (document.getElementById('tap-status') as HTMLElement).innerHTML =
-        `<span style="color:var(--green)">✓ Channel open — ${escHtml(formatPaymentAmount(pipeState.myBalance))} available</span>`;
+        `<span style="color:var(--green)">✓ Channel open — ${escHtml(formatPaymentAmount(pipeState.myBalance))} available to send</span><br>` +
+        `<span style="color:${receiveSummary.tone === 'low' ? 'var(--amber)' : 'var(--muted)'}">${escHtml(receiveSummary.message)}</span>`;
       (document.getElementById('send-btn') as HTMLButtonElement).disabled = pipeState.myBalance < BigInt(String(recipientInfo.amount));
     } else {
       pipeBalanceBreakdown = {
@@ -2461,6 +2535,50 @@ async function refreshStatusPanel(): Promise<void> {
   }
 }
 
+function updateCapacityBanner(): void {
+  const bannerEl = document.getElementById('capacity-banner') as HTMLElement | null;
+  const statusAlertEl = document.getElementById('status-capacity-alert') as HTMLElement | null;
+  if (!bannerEl || !statusAlertEl) return;
+
+  if (!(pipeState.nonce > 0n || pipeState.myBalance > 0n || pipeState.serverBalance > 0n)) {
+    bannerEl.style.display = 'none';
+    bannerEl.innerHTML = '';
+    statusAlertEl.innerHTML = '';
+    return;
+  }
+
+  const summary = describeReceiveCapacity(pipeState.serverBalance);
+  const target = getTargetReceiveLiquidity();
+  const refreshAmount = getCapacityRefreshAmount(pipeState.serverBalance);
+  const buttonDisabled = refreshAmount <= 0n ? 'disabled' : '';
+  const buttonLabel = refreshAmount > 0n
+    ? `Refresh Capacity (${formatPaymentAmount(refreshAmount)})`
+    : 'Capacity Full';
+
+  if (summary.tone === 'low') {
+    bannerEl.style.display = '';
+    bannerEl.innerHTML = `
+      <div class="alert alert-warning" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>${escHtml(summary.message)}</div>
+        <button class="btn btn-primary btn-sm" id="capacity-banner-refresh-btn" ${buttonDisabled}>${escHtml(buttonLabel)}</button>
+      </div>`;
+  } else {
+    bannerEl.style.display = 'none';
+    bannerEl.innerHTML = '';
+  }
+
+  statusAlertEl.innerHTML = `
+    <div class="alert ${summary.tone === 'low' ? 'alert-warning' : 'alert-info'}" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div>
+        ${escHtml(summary.message)}
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">
+          Target receive capacity: ${escHtml(formatPaymentAmount(target))} (${getRemainingReceives(target)} message(s)).
+        </div>
+      </div>
+      <button class="btn btn-secondary btn-sm" id="status-capacity-refresh-btn" ${buttonDisabled}>${escHtml(buttonLabel)}</button>
+    </div>`;
+}
+
 function updateIdentityUI(): void {
   const addr = walletAddress || '—';
   const pub  = walletPubkey  || '—';
@@ -2471,6 +2589,7 @@ function updateIdentityUI(): void {
   if (pk) pk.textContent = pub;
   if (ia) ia.textContent = addr;
   updateAdminSectionVisibility();
+  updateCapacityBanner();
 
   const tapEl = document.getElementById('status-tap-info');
   if (!tapEl) return;
@@ -2479,9 +2598,15 @@ function updateIdentityUI(): void {
     const settledServer = pipeBalanceBreakdown.settledServerBalance;
     const pendingMy = pipeBalanceBreakdown.pendingMyBalance;
     const pendingServer = pipeBalanceBreakdown.pendingServerBalance;
+    const sendTarget = getOpenTapAmount();
+    const receiveTarget = getTargetReceiveLiquidity();
+    const remainingReceives = getRemainingReceives(pipeState.serverBalance);
     tapEl.innerHTML = `
       <div style="font-size:11px;color:var(--muted);margin-top:4px;margin-bottom:8px">
         Send capacity is the balance you can spend toward the reservoir. Receive liquidity is the reservoir balance it can forward to you when others send mail. Effective liquidity shown below includes pending channel balance when available.
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px;margin-bottom:8px">
+        Mailbox policy: open with ${escHtml(formatPaymentAmount(sendTarget))} send capacity and target ${escHtml(formatPaymentAmount(receiveTarget))} receive liquidity. Current receive headroom is about ${remainingReceives} message(s).
       </div>
       ${serverStatus.runtimeSettings && typeof (serverStatus.runtimeSettings as { maxBorrowPerTap?: unknown }).maxBorrowPerTap === 'string' ? `
       <div style="font-size:11px;color:var(--muted);margin-top:2px;margin-bottom:8px">
@@ -2786,6 +2911,7 @@ document.getElementById('open-mailbox-btn')!.addEventListener('click', openMailb
 document.getElementById('check-tap-btn')!.addEventListener('click', checkTapAfterTx);
 document.getElementById('add-funds-btn')!.addEventListener('click', addFundsToTap);
 document.getElementById('borrow-more-btn')!.addEventListener('click', borrowMoreLiquidity);
+document.getElementById('refresh-capacity-btn')!.addEventListener('click', refreshReceiveCapacity);
 
 document.querySelectorAll<HTMLButtonElement>('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => showTab(btn.dataset.tab ?? ''));
@@ -2799,6 +2925,12 @@ document.getElementById('send-btn')!.addEventListener('click', sendMessage);
 document.getElementById('admin-set-agent-btn')!.addEventListener('click', setReservoirAgent);
 document.getElementById('admin-set-rate-btn')!.addEventListener('click', setBorrowRate);
 document.getElementById('admin-save-settings-btn')!.addEventListener('click', saveAdminRuntimeSettings);
+document.addEventListener('click', async (event) => {
+  const target = event.target as HTMLElement | null;
+  const button = target?.closest<HTMLButtonElement>('#capacity-banner-refresh-btn, #status-capacity-refresh-btn');
+  if (!button) return;
+  await refreshReceiveCapacity();
+});
 document.getElementById('inbox-list')!.addEventListener('click', async (event) => {
   const target = event.target as HTMLElement | null;
   const button = target?.closest<HTMLButtonElement>('button[data-action][data-message-id]');
