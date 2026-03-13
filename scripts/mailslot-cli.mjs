@@ -19,7 +19,7 @@ const {
   sendMessage,
 } = mailslot;
 
-const DEFAULT_SERVER_URL = process.env.MAILSLOT_SERVER_URL ?? process.env.STACKMAIL_SERVER_URL ?? 'http://127.0.0.1:8800';
+const DEFAULT_SERVER_URL = process.env.MAILSLOT_SERVER_URL ?? 'http://127.0.0.1:8800';
 const CONFIG_PATH = path.join(os.homedir(), '.config', 'mailslot', 'config.json');
 
 function usage() {
@@ -84,16 +84,8 @@ function loadJsonConfig() {
 
 function resolvePrivateKey(options) {
   const config = loadJsonConfig();
-  const configuredPath =
-    options['private-key-file']
-    ?? process.env.MAILSLOT_PRIVATE_KEY_FILE
-    ?? process.env.STACKMAIL_PRIVATE_KEY_FILE
-    ?? config.privateKeyFile;
-  const direct =
-    options['private-key']
-    ?? process.env.MAILSLOT_PRIVATE_KEY
-    ?? process.env.STACKMAIL_PRIVATE_KEY
-    ?? config.privateKey;
+  const configuredPath = options['private-key-file'] ?? process.env.MAILSLOT_PRIVATE_KEY_FILE ?? config.privateKeyFile;
+  const direct = options['private-key'] ?? process.env.MAILSLOT_PRIVATE_KEY ?? config.privateKey;
   if (typeof direct === 'string' && direct.trim()) return normalizePrivateKey(direct);
   if (typeof configuredPath === 'string' && configuredPath.trim()) {
     const expanded = configuredPath.startsWith('~/')
@@ -103,14 +95,13 @@ function resolvePrivateKey(options) {
   }
   throw new Error(
     `Missing private key. Set MAILSLOT_PRIVATE_KEY or MAILSLOT_PRIVATE_KEY_FILE.\n` +
-    `Legacy STACKMAIL_PRIVATE_KEY variables are also accepted.\n` +
     `Example:\n  export MAILSLOT_PRIVATE_KEY=<your-64-char-hex-key>`
   );
 }
 
 function resolveServerUrl(options) {
   const config = loadJsonConfig();
-  return String(options.server ?? process.env.MAILSLOT_SERVER_URL ?? process.env.STACKMAIL_SERVER_URL ?? config.serverUrl ?? DEFAULT_SERVER_URL);
+  return String(options.server ?? process.env.MAILSLOT_SERVER_URL ?? config.serverUrl ?? DEFAULT_SERVER_URL);
 }
 
 function formatTimestamp(ms) {

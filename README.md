@@ -48,7 +48,7 @@ See [DESIGN.md](./DESIGN.md) for full architecture details.
   - The browser private-key fallback is now behind the server-side `MAILSLOT_ENABLE_BROWSER_DECRYPT_KEY` flag and should stay off for real deployments.
   - Until the wallet path is ready for humans, the local decrypt key loaded in-browser remains a dev/testing fallback only.
   - The CLI fallback is:
-    - `curl -fsSL https://raw.githubusercontent.com/warmidris/stackmail/main/scripts/install-cli.sh | sh`
+    - `curl -fsSL https://raw.githubusercontent.com/warmidris/mailslot/main/scripts/install-cli.sh | sh`
     - `export MAILSLOT_PRIVATE_KEY=<your-64-char-hex-key>`
     - `mailslot inbox`
     - `mailslot compose`

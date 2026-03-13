@@ -197,44 +197,43 @@ export function runtimeSettingsFromConfig(config: Pick<
 }
 
 export function loadConfig(): Config {
-  const env = (name: string, legacy?: string): string | undefined => process.env[name] ?? (legacy ? process.env[legacy] : undefined);
-  const network = (env('MAILSLOT_STACKS_NETWORK', 'STACKMAIL_STACKS_NETWORK') ?? 'mainnet').toLowerCase();
+  const network = (process.env.MAILSLOT_STACKS_NETWORK ?? 'mainnet').toLowerCase();
   const chainId = network === 'mainnet' ? 1 : 2147483648;
   return {
-    host: env('MAILSLOT_HOST', 'STACKMAIL_HOST') ?? '0.0.0.0',
-    port: parseInt(env('MAILSLOT_PORT', 'STACKMAIL_PORT') ?? '8800', 10),
-    dbBackend: (env('MAILSLOT_DB_BACKEND', 'STACKMAIL_DB_BACKEND') ?? 'sqlite') as 'sqlite' | 'postgres',
-    dbFile: env('MAILSLOT_DB_FILE', 'STACKMAIL_DB_FILE') ?? './data/mailslot.db',
-    dbUrl: env('MAILSLOT_DB_URL', 'STACKMAIL_DB_URL'),
-    maxEncryptedBytes: parseInt(env('MAILSLOT_MAX_ENCRYPTED_BYTES', 'STACKMAIL_MAX_ENCRYPTED_BYTES') ?? '65536', 10),
-    authTimestampTtlMs: parseInt(env('MAILSLOT_AUTH_TIMESTAMP_TTL_MS', 'STACKMAIL_AUTH_TIMESTAMP_TTL_MS') ?? '300000', 10),
-    authAudience: env('MAILSLOT_AUTH_AUDIENCE', 'STACKMAIL_AUTH_AUDIENCE') ?? '',
-    stackflowNodeUrl: env('MAILSLOT_STACKFLOW_NODE_URL', 'STACKMAIL_STACKFLOW_NODE_URL') ?? '',
-    serverStxAddress: env('MAILSLOT_SERVER_STX_ADDRESS', 'STACKMAIL_SERVER_STX_ADDRESS') ?? '',
-    serverPrivateKey: env('MAILSLOT_SERVER_PRIVATE_KEY', 'STACKMAIL_SERVER_PRIVATE_KEY') ?? '',
-    sfContractId: env('MAILSLOT_SF_CONTRACT_ID', 'STACKMAIL_SF_CONTRACT_ID') ?? '',
-    reservoirContractId: env('MAILSLOT_RESERVOIR_CONTRACT_ID', 'STACKMAIL_RESERVOIR_CONTRACT_ID') ?? '',
+    host: process.env.MAILSLOT_HOST ?? '0.0.0.0',
+    port: parseInt(process.env.MAILSLOT_PORT ?? '8800', 10),
+    dbBackend: (process.env.MAILSLOT_DB_BACKEND ?? 'sqlite') as 'sqlite' | 'postgres',
+    dbFile: process.env.MAILSLOT_DB_FILE ?? './data/mailslot.db',
+    dbUrl: process.env.MAILSLOT_DB_URL,
+    maxEncryptedBytes: parseInt(process.env.MAILSLOT_MAX_ENCRYPTED_BYTES ?? '65536', 10),
+    authTimestampTtlMs: parseInt(process.env.MAILSLOT_AUTH_TIMESTAMP_TTL_MS ?? '300000', 10),
+    authAudience: process.env.MAILSLOT_AUTH_AUDIENCE ?? '',
+    stackflowNodeUrl: process.env.MAILSLOT_STACKFLOW_NODE_URL ?? '',
+    serverStxAddress: process.env.MAILSLOT_SERVER_STX_ADDRESS ?? '',
+    serverPrivateKey: process.env.MAILSLOT_SERVER_PRIVATE_KEY ?? '',
+    sfContractId: process.env.MAILSLOT_SF_CONTRACT_ID ?? '',
+    reservoirContractId: process.env.MAILSLOT_RESERVOIR_CONTRACT_ID ?? '',
     chainId,
-    messagePriceSats: env('MAILSLOT_MESSAGE_PRICE_SATS', 'STACKMAIL_MESSAGE_PRICE_SATS') ?? '1000',
-    minFeeSats: env('MAILSLOT_MIN_FEE_SATS', 'STACKMAIL_MIN_FEE_SATS') ?? '100',
-    maxPendingPerSender: parseInt(env('MAILSLOT_MAX_PENDING_PER_SENDER', 'STACKMAIL_MAX_PENDING_PER_SENDER') ?? '5', 10),
-    maxPendingPerRecipient: parseInt(env('MAILSLOT_MAX_PENDING_PER_RECIPIENT', 'STACKMAIL_MAX_PENDING_PER_RECIPIENT') ?? '20', 10),
-    maxDeferredPerSender: parseInt(env('MAILSLOT_MAX_DEFERRED_PER_SENDER', 'STACKMAIL_MAX_DEFERRED_PER_SENDER') ?? '5', 10),
-    maxDeferredPerRecipient: parseInt(env('MAILSLOT_MAX_DEFERRED_PER_RECIPIENT', 'STACKMAIL_MAX_DEFERRED_PER_RECIPIENT') ?? '20', 10),
-    maxDeferredGlobal: parseInt(env('MAILSLOT_MAX_DEFERRED_GLOBAL', 'STACKMAIL_MAX_DEFERRED_GLOBAL') ?? '200', 10),
-    deferredMessageTtlMs: parseInt(env('MAILSLOT_DEFERRED_MESSAGE_TTL_MS', 'STACKMAIL_DEFERRED_MESSAGE_TTL_MS') ?? '86400000', 10),
-    maxBorrowPerTap: env('MAILSLOT_MAX_BORROW_PER_TAP', 'STACKMAIL_MAX_BORROW_PER_TAP') ?? '100000',
-    inboxSessionTtlMs: parseInt(env('MAILSLOT_INBOX_SESSION_TTL_MS', 'STACKMAIL_INBOX_SESSION_TTL_MS') ?? '300000', 10),
-    allowedOrigins: (env('MAILSLOT_ALLOWED_ORIGINS', 'STACKMAIL_ALLOWED_ORIGINS') ?? '')
+    messagePriceSats: process.env.MAILSLOT_MESSAGE_PRICE_SATS ?? '1000',
+    minFeeSats: process.env.MAILSLOT_MIN_FEE_SATS ?? '100',
+    maxPendingPerSender: parseInt(process.env.MAILSLOT_MAX_PENDING_PER_SENDER ?? '5', 10),
+    maxPendingPerRecipient: parseInt(process.env.MAILSLOT_MAX_PENDING_PER_RECIPIENT ?? '20', 10),
+    maxDeferredPerSender: parseInt(process.env.MAILSLOT_MAX_DEFERRED_PER_SENDER ?? '5', 10),
+    maxDeferredPerRecipient: parseInt(process.env.MAILSLOT_MAX_DEFERRED_PER_RECIPIENT ?? '20', 10),
+    maxDeferredGlobal: parseInt(process.env.MAILSLOT_MAX_DEFERRED_GLOBAL ?? '200', 10),
+    deferredMessageTtlMs: parseInt(process.env.MAILSLOT_DEFERRED_MESSAGE_TTL_MS ?? '86400000', 10),
+    maxBorrowPerTap: process.env.MAILSLOT_MAX_BORROW_PER_TAP ?? '100000',
+    inboxSessionTtlMs: parseInt(process.env.MAILSLOT_INBOX_SESSION_TTL_MS ?? '300000', 10),
+    allowedOrigins: (process.env.MAILSLOT_ALLOWED_ORIGINS ?? '')
       .split(',')
       .map(value => value.trim())
       .filter(Boolean),
-    rateLimitWindowMs: parseInt(env('MAILSLOT_RATE_LIMIT_WINDOW_MS', 'STACKMAIL_RATE_LIMIT_WINDOW_MS') ?? '60000', 10),
-    rateLimitMax: parseInt(env('MAILSLOT_RATE_LIMIT_MAX', 'STACKMAIL_RATE_LIMIT_MAX') ?? '120', 10),
-    rateLimitAuthMax: parseInt(env('MAILSLOT_RATE_LIMIT_AUTH_MAX', 'STACKMAIL_RATE_LIMIT_AUTH_MAX') ?? '60', 10),
-    rateLimitSendMax: parseInt(env('MAILSLOT_RATE_LIMIT_SEND_MAX', 'STACKMAIL_RATE_LIMIT_SEND_MAX') ?? '20', 10),
-    rateLimitAdminMax: parseInt(env('MAILSLOT_RATE_LIMIT_ADMIN_MAX', 'STACKMAIL_RATE_LIMIT_ADMIN_MAX') ?? '10', 10),
-    enableBrowserDecryptKey: (env('MAILSLOT_ENABLE_BROWSER_DECRYPT_KEY', 'STACKMAIL_ENABLE_BROWSER_DECRYPT_KEY') ?? 'false').toLowerCase() === 'true',
-    disputeWebhookToken: env('MAILSLOT_DISPUTE_WEBHOOK_TOKEN', 'STACKMAIL_DISPUTE_WEBHOOK_TOKEN'),
+    rateLimitWindowMs: parseInt(process.env.MAILSLOT_RATE_LIMIT_WINDOW_MS ?? '60000', 10),
+    rateLimitMax: parseInt(process.env.MAILSLOT_RATE_LIMIT_MAX ?? '120', 10),
+    rateLimitAuthMax: parseInt(process.env.MAILSLOT_RATE_LIMIT_AUTH_MAX ?? '60', 10),
+    rateLimitSendMax: parseInt(process.env.MAILSLOT_RATE_LIMIT_SEND_MAX ?? '20', 10),
+    rateLimitAdminMax: parseInt(process.env.MAILSLOT_RATE_LIMIT_ADMIN_MAX ?? '10', 10),
+    enableBrowserDecryptKey: (process.env.MAILSLOT_ENABLE_BROWSER_DECRYPT_KEY ?? 'false').toLowerCase() === 'true',
+    disputeWebhookToken: process.env.MAILSLOT_DISPUTE_WEBHOOK_TOKEN,
   };
 }

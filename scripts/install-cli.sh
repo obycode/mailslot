@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_URL="${MAILSLOT_REPO_URL:-${STACKMAIL_REPO_URL:-https://github.com/warmidris/stackmail.git}}"
+REPO_URL="${MAILSLOT_REPO_URL:-https://github.com/warmidris/mailslot.git}"
 INSTALL_ROOT="${MAILSLOT_INSTALL_ROOT:-$HOME/.local/share/mailslot}"
 BIN_DIR="${MAILSLOT_BIN_DIR:-$HOME/.local/bin}"
 TMP_DIR="$(mktemp -d)"
@@ -32,7 +32,6 @@ mv "$TMP_DIR/repo" "$INSTALL_ROOT"
 
 mkdir -p "$BIN_DIR"
 ln -sf "$INSTALL_ROOT/bin/mailslot" "$BIN_DIR/mailslot"
-ln -sf "$INSTALL_ROOT/bin/mailslot" "$BIN_DIR/stackmail"
 
 cat <<EOF
 Mailslot CLI installed.

@@ -631,7 +631,7 @@ function updateDecryptCliHelp(): void {
   const serverUrl = window.location.origin;
   commandsEl.textContent = [
     'Install:',
-    'curl -fsSL https://raw.githubusercontent.com/warmidris/stackmail/main/scripts/install-cli.sh | sh',
+    'curl -fsSL https://raw.githubusercontent.com/warmidris/mailslot/main/scripts/install-cli.sh | sh',
     'export MAILSLOT_PRIVATE_KEY=<your-private-key>',
     '',
     'Open your inbox:',

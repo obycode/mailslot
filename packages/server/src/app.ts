@@ -186,9 +186,9 @@ export function createMailServer(
     }
     res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Headers', 'content-type, authorization, x-mailslot-auth, x-stackmail-auth, x-mailslot-session, x-stackmail-session, x-mailslot-payment, x-stackmail-payment, x-x402-payment, x-mailslot-webhook-token, x-stackmail-webhook-token');
+    res.setHeader('Access-Control-Allow-Headers', 'content-type, authorization, x-mailslot-auth, x-mailslot-session, x-mailslot-payment, x-x402-payment, x-mailslot-webhook-token');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Expose-Headers', 'x-mailslot-session, x-mailslot-session-expires-at, x-stackmail-session, x-stackmail-session-expires-at');
+    res.setHeader('Access-Control-Expose-Headers', 'x-mailslot-session, x-mailslot-session-expires-at');
     return true;
   }
 
@@ -269,7 +269,7 @@ export function createMailServer(
   }
 
   async function requireAdminAuth(req: IncomingMessage, res: ServerResponse): Promise<string | null> {
-    const authHeader = req.headers['x-mailslot-auth'] ?? req.headers['x-stackmail-auth'];
+    const authHeader = req.headers['x-mailslot-auth'];
     if (!authHeader) {
       json(res, 401, { error: 'auth-required', message: 'x-mailslot-auth header required' });
       return null;
@@ -347,7 +347,7 @@ export function createMailServer(
     if (!config.disputeWebhookToken) {
       return json(res, 503, { error: 'dispute-webhook-disabled' });
     }
-    const tokenHeader = req.headers['x-mailslot-webhook-token'] ?? req.headers['x-stackmail-webhook-token'];
+    const tokenHeader = req.headers['x-mailslot-webhook-token'];
     const authHeader = req.headers.authorization;
     const token = typeof tokenHeader === 'string'
       ? tokenHeader
@@ -403,7 +403,7 @@ export function createMailServer(
   // ─── Handlers ──────────────────────────────────────────────────────────────
 
   async function handleSend(req: IncomingMessage, res: ServerResponse, to: string): Promise<void> {
-    const paymentHeader = req.headers['x-x402-payment'] ?? req.headers['x-mailslot-payment'] ?? req.headers['x-stackmail-payment'];
+    const paymentHeader = req.headers['x-x402-payment'] ?? req.headers['x-mailslot-payment'];
     if (!paymentHeader) {
       const settings = currentSettings();
       return json(res, 402, {
@@ -1183,15 +1183,13 @@ export function createMailServer(
     res: ServerResponse,
     expected: { action: 'get-inbox' | 'claim-message' | 'get-message' | 'cancel-message'; messageId?: string },
   ): Promise<Awaited<ReturnType<typeof verifyInboxAuth>> | null> {
-    const sessionHeader = req.headers['x-mailslot-session'] ?? req.headers['x-stackmail-session'];
+    const sessionHeader = req.headers['x-mailslot-session'];
     if (sessionHeader) {
       try {
         const session = verifyInboxSessionToken(Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader, config);
         const refreshed = issueInboxSessionToken(session.address, config);
         res.setHeader('x-mailslot-session', refreshed.token);
         res.setHeader('x-mailslot-session-expires-at', String(refreshed.expiresAt));
-        res.setHeader('x-stackmail-session', refreshed.token);
-        res.setHeader('x-stackmail-session-expires-at', String(refreshed.expiresAt));
         return {
           payload: {
             action: expected.action,
@@ -1210,7 +1208,7 @@ export function createMailServer(
       }
     }
 
-    const authHeader = req.headers['x-mailslot-auth'] ?? req.headers['x-stackmail-auth'];
+    const authHeader = req.headers['x-mailslot-auth'];
     if (!authHeader) {
       json(res, 401, { error: 'auth-required', message: 'x-mailslot-auth or x-mailslot-session header required' });
       return null;
@@ -1226,8 +1224,6 @@ export function createMailServer(
       const session = issueInboxSessionToken(auth.payload.address, config);
       res.setHeader('x-mailslot-session', session.token);
       res.setHeader('x-mailslot-session-expires-at', String(session.expiresAt));
-      res.setHeader('x-stackmail-session', session.token);
-      res.setHeader('x-stackmail-session-expires-at', String(session.expiresAt));
       if (auth.payload.action !== expected.action) {
         json(res, 403, { error: 'auth-action-mismatch', message: `expected action ${expected.action}` });
         return null;
