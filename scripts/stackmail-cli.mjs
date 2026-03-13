@@ -181,7 +181,7 @@ async function composeFlow(ctx, defaults = {}) {
   return { to, subject, body, result };
 }
 
-function renderInboxScreen(ctx, messages, selected) {
+function renderInboxScreen(ctx, messages, selected, includeClaimed) {
   clearScreen();
   const total = messages.length;
   const token = ctx.status.supportedToken ?? 'token';
@@ -196,7 +196,7 @@ function renderInboxScreen(ctx, messages, selected) {
   }
   console.log('');
   if (total === 0) {
-    console.log('No messages yet.');
+    console.log(includeClaimed ? 'No messages in this view.' : 'No unread messages yet.');
   } else {
     messages.forEach((message, index) => {
       const marker = index === selected ? '>' : ' ';
@@ -208,7 +208,8 @@ function renderInboxScreen(ctx, messages, selected) {
     });
   }
   console.log('');
-  console.log('Keys: ↑/↓ move, Enter open, R reply, C compose, J refresh, Q quit');
+  console.log(`View: ${includeClaimed ? 'all messages' : 'unread only'}`);
+  console.log('Keys: ↑/↓ move, Enter open, R reply, C compose, A toggle archive, J refresh, Q quit');
 }
 
 function withRawMode(fn) {
@@ -221,20 +222,20 @@ function withRawMode(fn) {
   });
 }
 
-async function selectInboxMessage(ctx, messages) {
+async function selectInboxMessage(ctx, messages, includeClaimed) {
   if (!process.stdin.isTTY || !process.stdout.isTTY) return null;
   let selected = 0;
-  renderInboxScreen(ctx, messages, selected);
+  renderInboxScreen(ctx, messages, selected, includeClaimed);
   return withRawMode(() => new Promise((resolve) => {
     const onKeypress = async (_, key) => {
       if (key.name === 'up') {
         selected = selected > 0 ? selected - 1 : Math.max(0, messages.length - 1);
-        renderInboxScreen(ctx, messages, selected);
+        renderInboxScreen(ctx, messages, selected, includeClaimed);
         return;
       }
       if (key.name === 'down') {
         selected = messages.length === 0 ? 0 : (selected + 1) % messages.length;
-        renderInboxScreen(ctx, messages, selected);
+        renderInboxScreen(ctx, messages, selected, includeClaimed);
         return;
       }
       if (key.name === 'return') {
@@ -250,6 +251,11 @@ async function selectInboxMessage(ctx, messages) {
       if (key.name === 'c') {
         cleanup();
         resolve({ action: 'compose', message: null });
+        return;
+      }
+      if (key.name === 'a') {
+        cleanup();
+        resolve({ action: 'toggle-claimed', message: null });
         return;
       }
       if (key.name === 'j') {
@@ -336,7 +342,7 @@ async function readOne(ctx, messageId, asJson = false) {
 }
 
 async function runInbox(ctx, options) {
-  const includeClaimed = Boolean(options.claimed);
+  let includeClaimed = Boolean(options.claimed);
   const messages = await getInbox(ctx.privateKey, ctx.serverUrl, includeClaimed);
 
   if (options.json || !process.stdin.isTTY || !process.stdout.isTTY) {
@@ -345,8 +351,14 @@ async function runInbox(ctx, options) {
   }
 
   while (true) {
-    const selection = await selectInboxMessage(ctx, messages);
+    const selection = await selectInboxMessage(ctx, messages, includeClaimed);
     if (!selection || selection.action === 'quit') return;
+    if (selection.action === 'toggle-claimed') {
+      includeClaimed = !includeClaimed;
+      const next = await getInbox(ctx.privateKey, ctx.serverUrl, includeClaimed);
+      messages.splice(0, messages.length, ...next);
+      continue;
+    }
     if (selection.action === 'refresh') {
       const next = await getInbox(ctx.privateKey, ctx.serverUrl, includeClaimed);
       messages.splice(0, messages.length, ...next);
