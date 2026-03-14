@@ -34,7 +34,7 @@ const RESERVOIR   = 'SP3QFYVTMS0PRJT3K3GMDW9DGR33TDHENSDWVNQMR.sm-reservoir';
 const CHAIN_ID    = 1; // mainnet; updated from /status if available
 const OPEN_TAP_MULTIPLIER = 10n;
 const OPEN_TAP_NONCE  = 0n;
-const TARGET_RECEIVE_CAPACITY_MULTIPLIER = 20n;
+const DEFAULT_RECEIVE_CAPACITY_MULTIPLIER = 20n;
 const LOW_RECEIVE_CAPACITY_MULTIPLIER = 5n;
 const OPEN_BORROW_NONCE  = 1n;
 
@@ -85,8 +85,15 @@ function getOpenTapAmount(): bigint {
   return getRuntimeMessagePrice() * OPEN_TAP_MULTIPLIER;
 }
 
+function getReceiveCapacityMultiplier(): bigint {
+  const settings = serverStatus.runtimeSettings as Record<string, unknown> | undefined;
+  const raw = settings?.receiveCapacityMultiplier;
+  if (raw != null && /^\d+$/.test(String(raw))) return BigInt(String(raw));
+  return DEFAULT_RECEIVE_CAPACITY_MULTIPLIER;
+}
+
 function getTargetReceiveLiquidity(): bigint {
-  return getRuntimeMessagePrice() * TARGET_RECEIVE_CAPACITY_MULTIPLIER;
+  return getRuntimeMessagePrice() * getReceiveCapacityMultiplier();
 }
 
 function getLowReceiveLiquidityThreshold(): bigint {
@@ -349,6 +356,7 @@ function extractRuntimeSettings(status: Record<string, unknown>): RuntimeSetting
     maxDeferredGlobal: Number(value.maxDeferredGlobal),
     deferredMessageTtlMs: Number(value.deferredMessageTtlMs),
     maxBorrowPerTap: String(value.maxBorrowPerTap),
+    receiveCapacityMultiplier: value.receiveCapacityMultiplier != null ? Number(value.receiveCapacityMultiplier) : 20,
   };
 }
 
@@ -363,6 +371,7 @@ function populateAdminSettingsForm(settings: RuntimeSettingsPayload | null): voi
   (document.getElementById('admin-max-deferred-global-input') as HTMLInputElement | null)!.value = String(settings.maxDeferredGlobal);
   (document.getElementById('admin-deferred-ttl-input') as HTMLInputElement | null)!.value = String(settings.deferredMessageTtlMs);
   (document.getElementById('admin-max-borrow-per-tap-input') as HTMLInputElement | null)!.value = settings.maxBorrowPerTap;
+  (document.getElementById('admin-receive-capacity-multiplier-input') as HTMLInputElement | null)!.value = String(settings.receiveCapacityMultiplier);
 }
 
 function hasSupportedTokenResolved(): boolean {
@@ -706,6 +715,7 @@ interface RuntimeSettingsPayload {
   maxDeferredGlobal: number;
   deferredMessageTtlMs: number;
   maxBorrowPerTap: string;
+  receiveCapacityMultiplier: number;
 }
 const DECRYPT_KEY_STORAGE_KEY = 'mailslot.inboxDecryptPrivateKey';
 
@@ -2873,6 +2883,7 @@ async function saveAdminRuntimeSettings(): Promise<void> {
       maxDeferredGlobal: readInt('admin-max-deferred-global-input', 'Max Deferred / Global'),
       deferredMessageTtlMs: readInt('admin-deferred-ttl-input', 'Deferred TTL'),
       maxBorrowPerTap: readUintString('admin-max-borrow-per-tap-input', 'Max Borrow / Tap'),
+      receiveCapacityMultiplier: readInt('admin-receive-capacity-multiplier-input', 'Receive Capacity Multiplier'),
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

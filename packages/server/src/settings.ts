@@ -11,7 +11,8 @@ type RuntimeSettingKey =
   | 'maxDeferredPerRecipient'
   | 'maxDeferredGlobal'
   | 'deferredMessageTtlMs'
-  | 'maxBorrowPerTap';
+  | 'maxBorrowPerTap'
+  | 'receiveCapacityMultiplier';
 
 const RUNTIME_SETTING_KEYS: RuntimeSettingKey[] = [
   'messagePriceSats',
@@ -23,6 +24,7 @@ const RUNTIME_SETTING_KEYS: RuntimeSettingKey[] = [
   'maxDeferredGlobal',
   'deferredMessageTtlMs',
   'maxBorrowPerTap',
+  'receiveCapacityMultiplier',
 ];
 
 export class RuntimeSettingsStore {
@@ -70,6 +72,7 @@ export class RuntimeSettingsStore {
       maxDeferredGlobal: parseInt(raw.maxDeferredGlobal ?? String(this.defaults.maxDeferredGlobal), 10),
       deferredMessageTtlMs: parseInt(raw.deferredMessageTtlMs ?? String(this.defaults.deferredMessageTtlMs), 10),
       maxBorrowPerTap: raw.maxBorrowPerTap ?? this.defaults.maxBorrowPerTap,
+      receiveCapacityMultiplier: parseInt(raw.receiveCapacityMultiplier ?? String(this.defaults.receiveCapacityMultiplier), 10),
     };
   }
 
@@ -104,6 +107,7 @@ export function validateRuntimeSettings(input: RuntimeSettings): RuntimeSettings
   const messagePriceSats = uintString(String(input.messagePriceSats), 'messagePriceSats');
   const minFeeSats = uintString(String(input.minFeeSats), 'minFeeSats');
   const maxBorrowPerTap = uintString(String(input.maxBorrowPerTap), 'maxBorrowPerTap');
+  const receiveCapacityMultiplier = positiveInt(input.receiveCapacityMultiplier, 'receiveCapacityMultiplier');
   if (BigInt(minFeeSats) > BigInt(messagePriceSats)) {
     throw new Error('minFeeSats must be less than or equal to messagePriceSats');
   }
@@ -118,5 +122,6 @@ export function validateRuntimeSettings(input: RuntimeSettings): RuntimeSettings
     maxDeferredGlobal: positiveInt(input.maxDeferredGlobal, 'maxDeferredGlobal'),
     deferredMessageTtlMs: positiveInt(input.deferredMessageTtlMs, 'deferredMessageTtlMs'),
     maxBorrowPerTap,
+    receiveCapacityMultiplier,
   };
 }

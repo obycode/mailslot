@@ -248,6 +248,7 @@ const serverConfig: Config = {
   maxDeferredGlobal: 200,
   deferredMessageTtlMs: 86_400_000,
   maxBorrowPerTap: '100000',
+  receiveCapacityMultiplier: 20,
   inboxSessionTtlMs: 300_000,
   allowedOrigins: [],
   rateLimitWindowMs: 60_000,
@@ -605,7 +606,7 @@ describe('full send → inbox → preview → claim flow', () => {
     expect(previewRes.status).toBe(200);
     inboxSessionToken = previewRes.headers.get('x-mailslot-session') ?? inboxSessionToken;
     const preview = await previewRes.json() as {
-      encryptedPayload: { iv: string; ephemeralPK: string; cipherText: string; mac: string; wasString: boolean };
+      encryptedPayload: { v: 1; epk: string; iv: string; data: string };
     };
 
     const decrypted = await decryptMail(preview.encryptedPayload, recipientEncryptPrivkeyHex);
