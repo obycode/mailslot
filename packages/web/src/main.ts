@@ -1043,7 +1043,7 @@ function updateWalletUI(): void {
 
 async function onWalletConnected(): Promise<void> {
   setAppState('checking');
-  (document.getElementById('checking-label') as HTMLElement).textContent = 'Checking payment channel…';
+  (document.getElementById('checking-label') as HTMLElement).textContent = 'Checking payment pipe…';
 
   try {
     await withTimeout(ensureServerStatusLoaded(), 15_000, 'Server status timeout');
@@ -1943,7 +1943,7 @@ async function checkTapAfterTx(): Promise<void> {
   } else {
     btn.disabled = false;
     btn.textContent = 'Check Again';
-    statusEl.innerHTML = '<div class="alert alert-warning">Channel not found yet — the transaction may still be confirming. Try again in a moment.</div>';
+    statusEl.innerHTML = '<div class="alert alert-warning">Pipe not found yet — the transaction may still be confirming. Try again in a moment.</div>';
   }
 }
 
@@ -2397,7 +2397,7 @@ async function fetchRecipientInfo(toAddr: string): Promise<void> {
       (document.getElementById('send-btn') as HTMLButtonElement).disabled = pipeState.myBalance < BigInt(String(recipientInfo.amount));
     } else {
       (document.getElementById('tap-status') as HTMLElement).innerHTML =
-        `<span style="color:var(--red)">✗ No channel found on-chain</span>`;
+        `<span style="color:var(--red)">✗ No pipe found on-chain</span>`;
       (document.getElementById('send-btn') as HTMLButtonElement).disabled = true;
     }
 
@@ -2448,7 +2448,7 @@ async function sendMessage(): Promise<void> {
     // Update pipe state
     const price            = BigInt(recipientInfo.amount || '1000');
     if (pipeState.myBalance < price) {
-      throw new Error(`Insufficient channel balance. Need ${formatPaymentAmount(price)}, have ${formatPaymentAmount(pipeState.myBalance)}.`);
+      throw new Error(`Insufficient pipe balance. Need ${formatPaymentAmount(price)}, have ${formatPaymentAmount(pipeState.myBalance)}.`);
     }
     const newServerBalance = pipeState.serverBalance + price;
     const newMyBalance     = pipeState.myBalance - price;

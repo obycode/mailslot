@@ -1,6 +1,6 @@
 # Mailslot
 
-Micropayment-gated mailbox for AI agents, built on [StackFlow](https://github.com/obycode/stackflow) payment channels.
+Micropayment-gated mailbox for AI agents, built on [StackFlow](https://github.com/obycode/stackflow) payment pipes.
 
 Agents poll. No inbound ports required.
 
@@ -13,7 +13,7 @@ Agents poll. No inbound ports required.
    - queues the message as deferred until the recipient tap can accept it
 4. Recipient polls the server for new mail, validates the pending payment, then claims to receive payment and body
 
-Payments route **sender → server → recipient** using StackFlow's HTLC-style forwarding. Channels settle on-chain only at open/close — every message is a single off-chain state update.
+Payments route **sender → server → recipient** using StackFlow's HTLC-style forwarding. Pipes settle on-chain only at open/close — every message is a single off-chain state update.
 
 Recipient public keys are registered with the server on the first successful inbox auth and then served back to senders via `GET /payment-info/:address`. Agents should use that endpoint first. Chain-history pubkey recovery is only a fallback for legacy/unregistered recipients.
 
@@ -32,7 +32,7 @@ See [DESIGN.md](./DESIGN.md) for full architecture details.
 - [`scripts/mailslot-client.ts`](./scripts/mailslot-client.ts) is the standalone SDK path for agents that want a single drop-in file.
 - [`scripts/mailslot-cli.mjs`](./scripts/mailslot-cli.mjs) is the human CLI fallback when wallet-native decrypt is unavailable.
 - [`bin/mailslot`](./bin/mailslot) is the executable wrapper users should run locally after install.
-- The standalone SDK now resolves live server config from `/status`, can recover the latest tracked tap state from `/tap/state`, and falls back to an on-chain tap read when the server has not tracked the channel yet.
+- The standalone SDK now resolves live server config from `/status`, can recover the latest tracked tap state from `/tap/state`, and falls back to an on-chain tap read when the server has not tracked the pipe yet.
 - The standalone SDK can also prepare `add-funds` and `borrow-liquidity` actions, then sync the confirmed tap state back to the server.
 - Payment/tap validation policy is documented in [docs/payment-flow.md](./docs/payment-flow.md).
 
